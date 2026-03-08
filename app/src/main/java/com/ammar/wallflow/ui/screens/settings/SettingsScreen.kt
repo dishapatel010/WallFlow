@@ -53,6 +53,10 @@ import com.ammar.wallflow.extensions.restartApp
 import com.ammar.wallflow.extensions.safeLaunch
 import com.ammar.wallflow.extensions.toDp
 import com.ammar.wallflow.extensions.trimAll
+import com.ammar.wallflow.model.search.RedditFilters
+import com.ammar.wallflow.model.search.RedditSearch
+import com.ammar.wallflow.model.search.RedditSort
+import com.ammar.wallflow.model.search.RedditTimeRange
 import com.ammar.wallflow.model.search.SavedSearchSaver
 import com.ammar.wallflow.navigation.AppNavGraphs.SettingsNavGraph
 import com.ammar.wallflow.ui.common.LocalSystemController
@@ -66,6 +70,7 @@ import com.ammar.wallflow.ui.common.permissions.shouldShowRationale
 import com.ammar.wallflow.ui.common.rememberAdaptiveBottomSheetState
 import com.ammar.wallflow.ui.common.searchedit.EditSearchModalBottomSheet
 import com.ammar.wallflow.ui.common.searchedit.SavedSearchesDialog
+import com.ammar.wallflow.ui.screens.settings.composables.AccentColorPickerDialog
 import com.ammar.wallflow.ui.screens.settings.composables.AutoWallpaperSetToDialog
 import com.ammar.wallflow.ui.screens.settings.composables.ChangeDownloadLocationDialog
 import com.ammar.wallflow.ui.screens.settings.composables.ClearViewedWallpapersConfirmDialog
@@ -86,6 +91,7 @@ import com.ammar.wallflow.ui.screens.settings.composables.RestartDialog
 import com.ammar.wallflow.ui.screens.settings.composables.RestartReason
 import com.ammar.wallflow.ui.screens.settings.composables.ThemeOptionsDialog
 import com.ammar.wallflow.ui.screens.settings.detailcontents.AccountContent
+import com.ammar.wallflow.ui.screens.settings.detailcontents.WhatsNewContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.AutoWallpaperContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.CrashReportsContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.DownloadsContent
@@ -93,7 +99,9 @@ import com.ammar.wallflow.ui.screens.settings.detailcontents.LayoutSettingsScree
 import com.ammar.wallflow.ui.screens.settings.detailcontents.LookAndFeelContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.ManageAutoWallpaperSourcesContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.ObjectDetectionContent
+import com.ammar.wallflow.ui.screens.settings.detailcontents.RedditSubredditsContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.SavedSearchesContent
+import com.ammar.wallflow.ui.screens.settings.detailcontents.TelegramContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.ViewedWallpapersContent
 import com.ammar.wallflow.ui.screens.settings.detailcontents.ViewedWallpapersLookOptionsContent
 import com.ammar.wallflow.utils.StoragePermissions
@@ -129,6 +137,7 @@ fun SettingsScreen(
             horizontalPartitionSpacerSize = 8.dp,
         ),
     )
+    val coroutineScope = rememberCoroutineScope()
 
     val storagePerms = remember {
         StoragePermissions.getPermissions(
@@ -164,7 +173,9 @@ fun SettingsScreen(
         viewModel.setTempAutoWallpaperPrefs(null)
         if (!updatedAutoWallpaperPreferences.anySourceEnabled) {
             selectedExtraType = SettingsExtraType.AUTO_WALLPAPER_SOURCES
-            scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+            coroutineScope.launch {
+                scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+            }
             return@rememberMultiplePermissionsState
         }
         viewModel.updateAutoWallpaperEnabled(updatedAutoWallpaperPreferences.enabled)
@@ -192,7 +203,9 @@ fun SettingsScreen(
                     onBackClick = { navController.navigateUp() },
                     onItemClick = { type ->
                         selectedType = type
-                        scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Detail)
+                        coroutineScope.launch {
+                            scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Detail)
+                        }
                     },
                 )
             }
@@ -205,21 +218,27 @@ fun SettingsScreen(
                     viewModel = viewModel,
                     isExpanded = systemState.isExpanded,
                     autoWallpaperPermissionsState = autoWallpaperPermissionsState,
-                    onBackClick = { scaffoldNavigator.navigateBack() },
+                    onBackClick = { coroutineScope.launch { scaffoldNavigator.navigateBack() } },
                     onWallhavenApiKeyItemClick = {
                         navController.navigate(WallhavenApiKeyDialogDestination.route)
                     },
                     onLayoutClick = {
                         selectedExtraType = SettingsExtraType.LAYOUT
-                        scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+                        coroutineScope.launch {
+                            scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+                        }
                     },
                     onViewedWallpapersLookClick = {
                         selectedExtraType = SettingsExtraType.VIEW_WALLPAPERS_LOOK
-                        scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+                        coroutineScope.launch {
+                            scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+                        }
                     },
                     onSourcesClick = {
                         selectedExtraType = SettingsExtraType.AUTO_WALLPAPER_SOURCES
-                        scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+                        coroutineScope.launch {
+                            scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra)
+                        }
                     },
                 )
             }
@@ -239,7 +258,7 @@ fun SettingsScreen(
                     selectedExtraType = selectedExtraType,
                     viewModel = viewModel,
                     isExpanded = systemState.isExpanded,
-                    onBackClick = { scaffoldNavigator.navigateBack() },
+                    onBackClick = { coroutineScope.launch { scaffoldNavigator.navigateBack() } },
                 )
             }
         },
@@ -426,6 +445,16 @@ fun SettingsScreen(
         )
     }
 
+    if (uiState.showAccentColorDialog) {
+        AccentColorPickerDialog(
+            selectedColor = uiState.appPreferences.lookAndFeelPreferences.accentColor,
+            onColorSelected = {
+                viewModel.updateAccentColor(it)
+            },
+            onDismissRequest = { viewModel.showAccentColorDialog(false) },
+        )
+    }
+
     if (uiState.showAutoWallpaperSetToDialog) {
         AutoWallpaperSetToDialog(
             selectedTargets = uiState.appPreferences.autoWallpaperPreferences.targets,
@@ -578,6 +607,9 @@ private fun DetailContentScaffold(
                 label = "Settings Detail Content",
             ) { type ->
                 when (type) {
+                    SettingsType.WHATS_NEW -> WhatsNewContent(
+                        isExpanded = isExpanded,
+                    )
                     SettingsType.ACCOUNT -> AccountContent(
                         isExpanded = isExpanded,
                         onWallhavenApiKeyItemClick = onWallhavenApiKeyItemClick,
@@ -589,6 +621,14 @@ private fun DetailContentScaffold(
                         onLayoutClick = onLayoutClick,
                     )
                     SettingsType.DOWNLOADS -> DownloadsSettingsScreen(
+                        viewModel = viewModel,
+                        isExpanded = isExpanded,
+                    )
+                    SettingsType.TELEGRAM -> TelegramSettingsScreen(
+                        viewModel = viewModel,
+                        isExpanded = isExpanded,
+                    )
+                    SettingsType.REDDIT_SUBREDDITS -> RedditSubredditsSettingsScreen(
                         viewModel = viewModel,
                         isExpanded = isExpanded,
                     )
@@ -702,6 +742,126 @@ private fun ExtraContentScaffold(
 }
 
 @Composable
+private fun RedditSubredditsSettingsScreen(
+    viewModel: SettingsViewModel,
+    isExpanded: Boolean,
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // NOTE:
+    // This screen edits the subreddits used by the *home* Reddit feed only.
+    // `homeRedditSearch` is the source of truth for the Home pager's subreddits.
+    // Other Reddit search contexts (if any) are not modified here and should
+    // continue to manage their own subreddit state independently.
+    val redditSearch = uiState.appPreferences.homeRedditSearch
+    val currentSubreddits = redditSearch?.filters?.subreddits ?: emptySet()
+
+    RedditSubredditsContent(
+        isExpanded = isExpanded,
+        subreddits = currentSubreddits,
+        onAddSubreddit = { subreddit ->
+            val newSubreddits = currentSubreddits + subreddit
+            val newFilters = redditSearch?.filters?.copy(subreddits = newSubreddits)
+                ?: RedditFilters(
+                    subreddits = setOf(subreddit),
+                    includeNsfw = false,
+                    sort = RedditSort.TOP,
+                    timeRange = RedditTimeRange.WEEK,
+                )
+            val newRedditSearch = redditSearch?.copy(filters = newFilters)
+                ?: RedditSearch(
+                    query = "",
+                    filters = newFilters,
+                )
+            viewModel.updateHomeRedditSearch(newRedditSearch)
+        },
+        onRemoveSubreddit = { subreddit ->
+            val newSubreddits = currentSubreddits - subreddit
+            val newFilters = redditSearch?.filters?.copy(subreddits = newSubreddits)
+                ?: RedditFilters(
+                    subreddits = newSubreddits,
+                    includeNsfw = false,
+                    sort = RedditSort.TOP,
+                    timeRange = RedditTimeRange.WEEK,
+                )
+            val newRedditSearch = redditSearch?.copy(filters = newFilters)
+                ?: RedditSearch(
+                    query = "",
+                    filters = newFilters,
+                )
+            viewModel.updateHomeRedditSearch(newRedditSearch)
+        },
+    )
+}
+
+@Composable
+private fun TelegramSettingsScreen(
+    viewModel: SettingsViewModel,
+    isExpanded: Boolean,
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val telegramPreferences = uiState.appPreferences.telegramPreferences
+    TelegramContent(
+        isExpanded = isExpanded,
+        telegramPreferences = telegramPreferences,
+        onEnabledChange = { enabled ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(enabled = enabled),
+            )
+        },
+        onBotTokenChange = { token ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(botToken = token),
+            )
+        },
+        onChatIdChange = { chatId ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(chatId = chatId),
+            )
+        },
+        onMessageThreadIdChange = { threadId ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(messageThreadId = threadId),
+            )
+        },
+        onPostAfterDownloadChange = { post ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(postAfterDownload = post),
+            )
+        },
+        onIncludeFileNameChange = { value ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(includeFileName = value),
+            )
+        },
+        onIncludeDateChange = { value ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(includeDate = value),
+            )
+        },
+        onIncludeTagsChange = { value ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(includeTags = value),
+            )
+        },
+        onIncludeSourceUrlChange = { value ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(includeSourceUrl = value),
+            )
+        },
+        onSilentNotificationChange = { value ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(silentNotification = value),
+            )
+        },
+        onDisableWebPagePreviewChange = { value ->
+            viewModel.updateTelegramPreferences(
+                telegramPreferences.copy(disableWebPagePreview = value),
+            )
+        },
+    )
+}
+
+@Composable
 private fun LookAndFeelSettingsScreen(
     selectedExtraType: SettingsExtraType?,
     viewModel: SettingsViewModel,
@@ -717,10 +877,22 @@ private fun LookAndFeelSettingsScreen(
         blurNsfw = appPreferences.blurNsfw,
         blurSketchy = appPreferences.blurSketchy,
         showLocalTab = lookAndFeelPreferences.showLocalTab,
+        accentColor = lookAndFeelPreferences.accentColor,
+        showCarousel = lookAndFeelPreferences.layoutPreferences.showCarousel,
         onThemeClick = { viewModel.showThemeOptionsDialog(true) },
         onLayoutClick = onLayoutClick,
+        onAccentColorClick = { viewModel.showAccentColorDialog(true) },
         onBlurNsfwCheckChange = viewModel::setBlurNsfw,
         onBlurSketchyCheckChange = viewModel::setBlurSketchy,
+        onShowCarouselChange = { show ->
+            viewModel.updateLookAndFeelPrefs(
+                lookAndFeelPreferences.copy(
+                    layoutPreferences = lookAndFeelPreferences.layoutPreferences.copy(
+                        showCarousel = show,
+                    ),
+                ),
+            )
+        },
         onShowLocalTabChange = { show ->
             viewModel.updateLookAndFeelPrefs(
                 lookAndFeelPreferences.copy(

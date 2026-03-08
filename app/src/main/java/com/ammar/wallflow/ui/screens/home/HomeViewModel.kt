@@ -33,10 +33,12 @@ import com.ammar.wallflow.model.Wallpaper
 import com.ammar.wallflow.model.search.RedditFilters
 import com.ammar.wallflow.model.search.RedditSearch
 import com.ammar.wallflow.model.search.RedditSort
+import com.ammar.wallflow.model.search.RedditSubredditFilter
 import com.ammar.wallflow.model.search.RedditTimeRange
 import com.ammar.wallflow.model.search.SavedSearch
 import com.ammar.wallflow.model.search.Search
 import com.ammar.wallflow.model.search.WallhavenFilters
+import com.ammar.wallflow.model.reddit.RedditWallpaper
 import com.ammar.wallflow.model.search.WallhavenSearch
 import com.ammar.wallflow.model.search.WallhavenSorting
 import com.ammar.wallflow.model.search.WallhavenTopRange
@@ -110,7 +112,9 @@ class HomeViewModel @Inject constructor(
         if (!sourceEnabled) {
             source = OnlineSource.entries.first { it != source }
         }
-        if (source == OnlineSource.REDDIT && homeRedditSearch == null) {
+        if (source == OnlineSource.REDDIT &&
+            (homeRedditSearch == null || homeRedditSearch.filters.subreddits.isEmpty())
+        ) {
             // fallback to wallhaven
             source = OnlineSource.WALLHAVEN
         }
@@ -123,10 +127,25 @@ class HomeViewModel @Inject constructor(
             is RedditSearch -> redditRepository.wallpapersPager(mainSearch)
         }
     } else {
-        homeSearchFlow.flatMapLatest {
-            when (it) {
-                is WallhavenSearch -> wallhavenRepository.wallpapersPager(it)
-                is RedditSearch -> redditRepository.wallpapersPager(it)
+        combine(
+            homeSearchFlow,
+            appPreferencesRepository.appPreferencesFlow,
+        ) { search, prefs ->
+            search to prefs
+        }.flatMapLatest { (search, prefs) ->
+            val showCarousel = prefs.lookAndFeelPreferences.layoutPreferences.showCarousel
+            val subFilter = prefs.redditSubredditFilter
+            when (search) {
+                is WallhavenSearch -> wallhavenRepository.wallpapersPager(search)
+                is RedditSearch -> {
+                    // apply subreddit filter at query level (does NOT touch saved settings)
+                    val effectiveSearch = applySubredditFilter(search, subFilter)
+                    if (showCarousel) {
+                        redditRepository.wallpapersPagerGrouped(effectiveSearch)
+                    } else {
+                        redditRepository.wallpapersPager(effectiveSearch)
+                    }
+                }
             }
         }
     }.cachedIn(viewModelScope)
@@ -206,6 +225,8 @@ class HomeViewModel @Inject constructor(
                 sources = appPreferences.homeSources.toImmutableMap(),
                 prevMainWallhavenSearch = appPreferences.mainWallhavenSearch,
                 prevMainRedditSearch = appPreferences.mainRedditSearch,
+                telegramIsConfigured = appPreferences.telegramPreferences.enabled && appPreferences.telegramPreferences.isConfigured,
+                redditSubredditFilter = appPreferences.redditSubredditFilter,
             ),
         )
     }.stateIn(
@@ -262,7 +283,25 @@ class HomeViewModel @Inject constructor(
         )
     }
 
+    fun setQuickActionsWallpaper(wallpaper: Wallpaper?) = localUiState.update {
+        it.copy(quickActionsWallpaper = partial(wallpaper))
+    }
+
     fun toggleFavorite(wallpaper: Wallpaper) = viewModelScope.launch {
+        if (wallpaper is RedditWallpaper && wallpaper.galleryPosition != null) {
+            val gallery = redditRepository.galleryWallpapers(wallpaper.postId)
+            if (gallery.size > 1) {
+                val isFav = favoritesRepository.isFavorite(wallpaper.id, wallpaper.source)
+                gallery.forEach { gWp ->
+                    if (isFav) {
+                        favoritesRepository.removeFavorite(gWp.id, gWp.source)
+                    } else {
+                        favoritesRepository.addFavorite(gWp.id, gWp.source)
+                    }
+                }
+                return@launch
+            }
+        }
         favoritesRepository.toggleFavorite(
             sourceId = wallpaper.id,
             source = wallpaper.source,
@@ -367,6 +406,10 @@ class HomeViewModel @Inject constructor(
     }
 
     suspend fun checkSavedSearchNameExists(name: String) = savedSearchRepository.exists(name)
+
+    fun updateRedditSubredditFilter(filter: RedditSubredditFilter) = viewModelScope.launch {
+        appPreferencesRepository.updateRedditSubredditFilter(filter)
+    }
 }
 
 private val tempWallhavenTags = List(3) {
@@ -379,6 +422,20 @@ private val tempWallhavenTags = List(3) {
         purity = Purity.SFW,
         createdAt = Clock.System.now(),
     )
+}
+
+/**
+ * Derives an effective [RedditSearch] that applies [filter] on top of the configured subreddits
+ * without mutating any persisted setting.
+ */
+private fun applySubredditFilter(search: RedditSearch, filter: RedditSubredditFilter): RedditSearch {
+    if (!filter.isActive) return search
+    val configuredSubreddits = search.filters.subreddits
+    val effective = filter.apply(configuredSubreddits)
+    // Don't apply the filter if it would eliminate every subreddit — that would crash the
+    // network layer and produce a confusing empty state. Show all instead.
+    if (effective.isEmpty() || effective == configuredSubreddits) return search
+    return search.copy(filters = search.filters.copy(subreddits = effective))
 }
 
 @Stable
@@ -413,6 +470,9 @@ data class HomeUiState(
     val manageSourcesState: ManageSourcesState = ManageSourcesState(),
     val prevMainWallhavenSearch: WallhavenSearch? = null,
     val prevMainRedditSearch: RedditSearch? = null,
+    val quickActionsWallpaper: Wallpaper? = null,
+    val telegramIsConfigured: Boolean = false,
+    val redditSubredditFilter: RedditSubredditFilter = RedditSubredditFilter(),
 ) {
     val isHome = mainSearch == null
     val showSaveAsDialog = saveSearchAsSearch != null

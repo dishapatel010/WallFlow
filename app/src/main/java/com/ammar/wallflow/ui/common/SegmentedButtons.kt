@@ -1,28 +1,24 @@
 package com.ammar.wallflow.ui.common
 
 import android.content.res.Configuration
-import android.util.Log
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.stringResource
@@ -32,157 +28,68 @@ import androidx.compose.ui.unit.dp
 import com.ammar.wallflow.R
 import com.ammar.wallflow.ui.theme.WallFlowTheme
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun <T> SegmentedButtons(
     modifier: Modifier = Modifier,
     options: List<SegmentedButtonOption<T>>,
     mode: SegmentedButtonsMode = SegmentedButtonsMode.MULTI_SELECT,
     value: Set<T>,
-    containerColor: Color = Color.Transparent,
-    containerColorChecked: Color = MaterialTheme.colorScheme.secondaryContainer,
     enabled: Boolean = true,
     onChange: (values: Set<T>) -> Unit = {},
 ) {
-    try {
-        require(options.size > 1) { "IconToggleButtonGroup requires at-least 2 options" }
-    } catch (e: Exception) {
-        Log.w("IconToggleButtonGroup", "", e)
-    }
-
-    if (mode == SegmentedButtonsMode.SINGLE_SELECT) {
-        try {
-            require(value.size == 1) { "Only 1 value is allowed for SINGLE_SELECT mode" }
-        } catch (e: Exception) {
-            Log.w("IconToggleButtonGroup", "", e)
-        }
-    }
-
-    Row(
+    ButtonGroup(
         modifier = modifier,
     ) {
-        options.mapIndexed { index, option ->
-            require(option.text != null || option.icon != null) {
-                "Require either text or icon"
-            }
-
+        options.forEach { option ->
             val isChecked = option.value in value
             val currentEnabled = enabled && option.enabled
-            val currentContainerColor by animateColorAsState(
-                targetValue = if (isChecked) containerColorChecked else containerColor,
-                label = "currentContainerColor",
-            )
-
-            val optionModifier = when (index) {
-                0 -> {
-                    if (isChecked) {
-                        Modifier
-                            .offset(0.dp, 0.dp)
-                        // .zIndex(1f)
-                    } else {
-                        Modifier
-                            .offset(0.dp, 0.dp)
-                        // .zIndex(0f)
-                    }
-                }
-
-                else -> {
-                    val offset = -1 * index
-                    if (isChecked) {
-                        Modifier
-                            .offset(offset.dp, 0.dp)
-                        // .zIndex(1f)
-                    } else {
-                        Modifier
-                            .offset(offset.dp, 0.dp)
-                        // .zIndex(0f)
-                    }
-                }
-            }.weight(1f)
-
-            val shape = when (index) {
-                // left outer button
-                0 -> RoundedCornerShape(
-                    topStartPercent = 50,
-                    topEndPercent = 0,
-                    bottomStartPercent = 50,
-                    bottomEndPercent = 0,
-                )
-                // right outer button
-                options.size - 1 -> RoundedCornerShape(
-                    topStartPercent = 0,
-                    topEndPercent = 50,
-                    bottomStartPercent = 0,
-                    bottomEndPercent = 50,
-                )
-                // middle button
-                else -> RoundedCornerShape(
-                    topStart = 0.dp,
-                    topEnd = 0.dp,
-                    bottomStart = 0.dp,
-                    bottomEnd = 0.dp,
-                )
-            }
-
-            val contentColor = when {
-                isChecked -> MaterialTheme.colorScheme.onSecondaryContainer
-                else -> MaterialTheme.colorScheme.onSurface
-            }
-
-            OutlinedButton(
-                modifier = optionModifier,
-                shape = shape,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = currentContainerColor,
-                    contentColor = contentColor,
-                ),
-                enabled = currentEnabled,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                onClick = {
+            ToggleButton(
+                checked = isChecked,
+                onCheckedChange = { checked ->
                     onChange(
                         if (mode == SegmentedButtonsMode.SINGLE_SELECT) {
                             setOf(option.value)
                         } else {
-                            if (isChecked) {
-                                // remove from values
-                                value.filter { it != option.value }.toSet()
-                            } else {
-                                // add to values
+                            if (checked) {
                                 value + option.value
+                            } else {
+                                value.filter { it != option.value }.toSet()
                             }
                         },
                     )
                 },
-                content = {
-                    if (isChecked) {
+                enabled = currentEnabled,
+                modifier = Modifier.weight(1f),
+            ) {
+                if (isChecked) {
+                    Icon(
+                        modifier = Modifier.size(18.dp),
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = stringResource(R.string.selected),
+                    )
+                    Spacer(modifier = Modifier.requiredWidth(4.dp))
+                }
+                if (!isChecked || option.text == null) {
+                    option.icon?.run {
                         Icon(
                             modifier = Modifier.size(18.dp),
-                            imageVector = Icons.Outlined.Check,
-                            contentDescription = stringResource(R.string.selected),
-                        )
-                        Spacer(modifier = Modifier.requiredWidth(4.dp))
-                    }
-                    if (!isChecked || option.text == null) {
-                        option.icon?.run {
-                            Icon(
-                                modifier = Modifier.size(18.dp),
-                                painter = this(),
-                                contentDescription = "",
-                            )
-                        }
-                    }
-                    if (!isChecked && option.icon != null && option.text != null) {
-                        Spacer(modifier = Modifier.requiredWidth(4.dp))
-                    }
-                    option.text?.run {
-                        Text(
-                            text = this,
-                            overflow = TextOverflow.Clip,
-                            maxLines = 1,
-                            style = MaterialTheme.typography.labelMedium,
+                            painter = this(),
+                            contentDescription = "",
                         )
                     }
-                },
-            )
+                }
+                if (!isChecked && option.icon != null && option.text != null) {
+                    Spacer(modifier = Modifier.requiredWidth(4.dp))
+                }
+                option.text?.run {
+                    Text(
+                        text = this,
+                        overflow = TextOverflow.Clip,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
@@ -224,11 +131,13 @@ private val tempToggleOptions: List<SegmentedButtonOption<String>> = listOf(
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun PreviewButtonToggle() {
+    var value by remember { mutableStateOf(setOf("First", "Third")) }
     WallFlowTheme {
         Surface {
             SegmentedButtons(
                 options = tempToggleOptions,
-                value = setOf("First", "Third"),
+                value = value,
+                onChange = { value = it },
             )
         }
     }

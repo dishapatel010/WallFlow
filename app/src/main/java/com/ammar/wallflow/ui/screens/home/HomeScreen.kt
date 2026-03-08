@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -86,7 +87,7 @@ import kotlin.math.roundToInt
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Destination<AppNavGraphs.HomeNavGraph>(
     start = true,
     navArgs = HomeScreenNavArgs::class,
@@ -362,7 +363,7 @@ fun HomeScreen(
             },
             refreshState = refreshState,
             refreshIndicator = {
-                PullToRefreshDefaults.Indicator(
+                PullToRefreshDefaults.LoadingIndicator(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .offset(y = SearchBar.Defaults.height - 8.dp),
@@ -389,6 +390,32 @@ fun HomeScreen(
             fullWallpaperLightDarkTypeFlags = viewerUiState.lightDarkTypeFlags,
             onWallpaperClick = onWallpaperClick,
             onWallpaperFavoriteClick = viewModel::toggleFavorite,
+            onWallpaperLongClick = viewModel::setQuickActionsWallpaper,
+            quickActionsWallpaper = uiState.quickActionsWallpaper,
+            showTelegram = uiState.telegramIsConfigured,
+            onQuickActionsDismiss = { viewModel.setQuickActionsWallpaper(null) },
+            onQuickActionsFavoriteClick = { wallpaper ->
+                viewModel.toggleFavorite(wallpaper)
+            },
+            onQuickActionsApplyWallpaperClick = { wallpaper ->
+                applyWallpaper(context, viewerViewModel, wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
+            onQuickActionsDownloadClick = { wallpaper ->
+                viewerViewModel.download(wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
+            onQuickActionsShareClick = { wallpaper ->
+                shareWallpaperUrl(context, wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
+            onQuickActionsTelegramClick = { wallpaper ->
+                // Pass wallpaper directly – avoids the race condition where
+                // setWallpaper() triggers an async fetch and postToTelegram()
+                // would read a null wallpaper from uiState.
+                viewerViewModel.postToTelegram(wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
             onTagClick = onTagClick,
             onFABClick = onFilterFABClick,
             onRefresh = {
@@ -408,7 +435,8 @@ fun HomeScreen(
                 shareWallpaper(context, viewerViewModel, wallpaper)
             },
             onFullWallpaperApplyWallpaperClick = {
-                val wallpaper = viewerUiState.wallpaper ?: return@HomeScreenContent
+                val wallpaper = viewerUiState.galleryWallpapers?.getOrNull(viewerViewModel.currentGalleryPage)
+                    ?: viewerUiState.wallpaper ?: return@HomeScreenContent
                 applyWallpaper(context, viewerViewModel, wallpaper)
             },
             onFullWallpaperFullScreenClick = {
@@ -424,7 +452,17 @@ fun HomeScreen(
             },
             onFullWallpaperUploaderClick = onUploaderClick,
             onFullWallpaperDownloadPermissionsGranted = viewerViewModel::download,
+            onFullWallpaperDownloadAllPermissionsGranted = viewerViewModel::downloadAll,
             onFullWallpaperLightDarkTypeFlagsChange = viewerViewModel::updateLightDarkTypeFlags,
+            fullWallpaperGalleryWallpapers = viewerUiState.galleryWallpapers,
+            fullWallpaperGalleryPageIndex = viewerUiState.galleryPageIndex,
+            onFullWallpaperGalleryPageChange = viewerViewModel::setGalleryPage,
+            showFullWallpaperTelegramAction = viewerUiState.telegramEnabled && viewerUiState.telegramIsConfigured,
+            onFullWallpaperPostToTelegramClick = {
+                val wallpaper = viewerUiState.galleryWallpapers?.getOrNull(viewerViewModel.currentGalleryPage)
+                    ?: viewerUiState.wallpaper ?: return@HomeScreenContent
+                viewerViewModel.postToTelegram(wallpaper)
+            },
         )
     }
 
@@ -509,6 +547,8 @@ fun HomeScreen(
             showQueryField = uiState.isHome,
             showNSFW = uiState.showNSFW,
             onChange = { localSearch = it },
+            redditSubredditFilter = uiState.redditSubredditFilter,
+            onRedditFilterChange = viewModel::updateRedditSubredditFilter,
             onErrorStateChange = { hasError = it },
             onDismissRequest = { viewModel.showFilters(false) },
         )

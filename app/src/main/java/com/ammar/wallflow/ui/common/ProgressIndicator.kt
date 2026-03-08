@@ -1,7 +1,8 @@
 package com.ammar.wallflow.ui.common
 
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
@@ -9,6 +10,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ProgressIndicator(
     modifier: Modifier = Modifier,
@@ -18,32 +20,30 @@ fun ProgressIndicator(
 ) {
     if (progress <= -1F) {
         if (circular) {
-            CircularProgressIndicator(
+            // M3 Expressive: LoadingIndicator replaces indeterminate CircularProgressIndicator
+            LoadingIndicator(
                 modifier = modifier.testTag("circular-progress"),
-                strokeCap = strokeCap,
             )
         } else {
-            LinearProgressIndicator(
+            LinearWavyProgressIndicator(
                 modifier = modifier.testTag("linear-progress"),
-                strokeCap = strokeCap,
             )
         }
     } else {
         if (circular) {
-            CircularProgressIndicator(
+            // M3 Expressive: determinate LoadingIndicator
+            LoadingIndicator(
                 progress = { progress },
                 modifier = modifier
                     .testTag("circular-progress")
                     .semantics { contentDescription = "Progress $progress" },
-                strokeCap = strokeCap,
             )
         } else {
-            LinearProgressIndicator(
+            LinearWavyProgressIndicator(
                 progress = { progress },
                 modifier = modifier
                     .testTag("linear-progress")
                     .semantics { contentDescription = "Progress $progress" },
-                strokeCap = strokeCap,
             )
         }
     }

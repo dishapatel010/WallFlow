@@ -72,6 +72,44 @@ class FavoritesRepository @Inject constructor(
         }.filter { wallpaper -> wallpaper != wallhavenWallpaper1 }
     }.flowOn(ioDispatcher)
 
+    /**
+     * Like [wallpapersPager] but each result carries the original [kotlinx.datetime.Instant] at
+     * which the wallpaper was favorited as the second component of a [Pair].
+     */
+    @OptIn(ExperimentalPagingApi::class)
+    fun wallpapersWithDatePager(
+        context: Context,
+        pageSize: Int = 24,
+        prefetchDistance: Int = pageSize,
+        initialLoadSize: Int = pageSize * 3,
+    ): Flow<PagingData<Pair<Wallpaper, kotlinx.datetime.Instant>>> = Pager(
+        config = PagingConfig(
+            pageSize = pageSize,
+            prefetchDistance = prefetchDistance,
+            initialLoadSize = initialLoadSize,
+        ),
+        remoteMediator = null,
+        pagingSourceFactory = { favoriteDao.pagingSource() },
+    ).flow.map {
+        it.map { entity ->
+            val wallpaper = when (entity.source) {
+                Source.WALLHAVEN -> {
+                    val wallpaperEntity = wallhavenWallpapersDao.getByWallhavenId(entity.sourceId)
+                    wallpaperEntity?.toWallpaper() ?: wallhavenWallpaper1
+                }
+                Source.REDDIT -> {
+                    val wallpaperEntity = redditWallpapersDao.getByRedditId(entity.sourceId)
+                    wallpaperEntity?.toWallpaper() ?: wallhavenWallpaper1
+                }
+                Source.LOCAL -> localWallpapersRepository.wallpaper(
+                    context = context,
+                    wallpaperUriStr = entity.sourceId,
+                ).firstOrNull()?.successOr(null) ?: wallhavenWallpaper1
+            }
+            wallpaper to entity.favoritedOn
+        }.filter { (wallpaper, _) -> wallpaper != wallhavenWallpaper1 }
+    }.flowOn(ioDispatcher)
+
     suspend fun toggleFavorite(
         sourceId: String,
         source: Source,
@@ -117,6 +155,20 @@ class FavoritesRepository @Inject constructor(
                 favoritedOn = Clock.System.now(),
             ),
         )
+    }
+
+    suspend fun removeFavorite(
+        sourceId: String,
+        source: Source,
+    ) = withContext(ioDispatcher) {
+        favoriteDao.deleteBySourceIdAndSource(sourceId = sourceId, source = source)
+    }
+
+    suspend fun isFavorite(
+        sourceId: String,
+        source: Source,
+    ): Boolean = withContext(ioDispatcher) {
+        favoriteDao.exists(sourceId = sourceId, source = source)
     }
 
     suspend fun getRandom(context: Context) = withContext(ioDispatcher) {

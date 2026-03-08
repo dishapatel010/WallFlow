@@ -27,6 +27,7 @@ import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.LayoutP
 import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.adaptiveColMinWidthPctSection
 import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.gridColTypeSection
 import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.gridTypeSection
+import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.itemSpacingSection
 import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.noOfColumnsSection
 import com.ammar.wallflow.ui.screens.settings.detailcontents.composables.roundedCornersSection
 import com.ammar.wallflow.ui.theme.WallFlowTheme
@@ -107,6 +108,16 @@ fun LayoutSettingsScreenContent(
                 onRoundedCornersChange = {
                     onLayoutPreferencesChange(
                         layoutPreferences.copy(roundedCorners = it),
+                    )
+                },
+            )
+            itemSpacingSection(
+                itemSpacingDp = layoutPreferences.gridItemSpacingDp,
+                sliderPadding = sliderPadding,
+                isExpanded = supportsTwoPane,
+                onItemSpacingDpChange = {
+                    onLayoutPreferencesChange(
+                        layoutPreferences.copy(gridItemSpacingDp = it),
                     )
                 },
             )

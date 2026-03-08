@@ -49,6 +49,13 @@
 # Guarded by a NoClassDefFoundError try/catch and only used when on the classpath.
 -dontwarn kotlin.Unit
 
+######### Navigation #########
+
+# Keep NavType.fromArgType used by Compose Destinations and Navigation.
+-keepclassmembers class androidx.navigation.NavType {
+    public static ** fromArgType(java.lang.String, java.lang.String);
+}
+
 # Top-level functions that can only be used by Kotlin.
 -dontwarn retrofit2.KotlinExtensions
 -dontwarn retrofit2.KotlinExtensions$*

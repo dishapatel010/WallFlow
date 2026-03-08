@@ -6,7 +6,7 @@
     <string name="more">もっと</string>
     <string name="home">ホーム</string>
     <string name="popular_tags">人気のタグ</string>
-    <string name="app_name">WallFlow</string>
+    <string name="app_name">Wandverzierung</string>
     <string name="wallhaven_api_key_desc">NSFWコンテンツを表示するには必須です。</string>
     <string name="back">戻る</string>
     <string name="cleanup_channel_description">古いキャッシュとファイルのクリーンアップの進行状況通知を表示するチャネル</string>

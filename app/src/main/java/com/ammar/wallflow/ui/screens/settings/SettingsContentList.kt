@@ -33,6 +33,14 @@ fun SettingsContentList(
         ),
     ) {
         mainSettingsListItem(
+            type = SettingsType.WHATS_NEW,
+            labelRes = R.string.whats_new,
+            iconRes = R.drawable.baseline_new_releases_24,
+            isExpanded = isExpanded,
+            selectedType = selectedType,
+            onItemClick = onItemClick,
+        )
+        mainSettingsListItem(
             type = SettingsType.ACCOUNT,
             labelRes = R.string.account,
             iconRes = R.drawable.baseline_person_24,
@@ -52,6 +60,22 @@ fun SettingsContentList(
             type = SettingsType.DOWNLOADS,
             labelRes = R.string.downloads,
             iconRes = R.drawable.baseline_download_24,
+            isExpanded = isExpanded,
+            selectedType = selectedType,
+            onItemClick = onItemClick,
+        )
+        mainSettingsListItem(
+            type = SettingsType.TELEGRAM,
+            labelRes = R.string.telegram,
+            iconRes = R.drawable.baseline_send_24,
+            isExpanded = isExpanded,
+            selectedType = selectedType,
+            onItemClick = onItemClick,
+        )
+        mainSettingsListItem(
+            type = SettingsType.REDDIT_SUBREDDITS,
+            labelRes = R.string.reddit_subreddits,
+            iconRes = R.drawable.reddit,
             isExpanded = isExpanded,
             selectedType = selectedType,
             onItemClick = onItemClick,

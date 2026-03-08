@@ -80,7 +80,7 @@ fun NetworkRedditPost.toWallpaperEntities(): List<RedditWallpaperEntity> {
             val mediaId = item.media_id
             val media = mediaMetadata[mediaId] ?: return@mapIndexed null
             val source = media.source ?: return@mapIndexed null
-            val thumbnailUrl = media.resolutions?.last()?.url?.htmlUnescaped()
+            val thumbnailUrl = media.resolutions?.lastOrNull()?.url?.htmlUnescaped()
                 ?: return@mapIndexed null
             val url = source.url.htmlUnescaped()
             val mimeType = media.m ?: parseMimeType(url)
@@ -109,7 +109,7 @@ fun NetworkRedditPost.toWallpaperEntities(): List<RedditWallpaperEntity> {
         val previewImage = preview.images.first()
         val source = previewImage.source ?: return emptyList()
         val redditId = previewImage.id ?: return emptyList()
-        val thumbnail = previewImage.resolutions?.last() ?: return emptyList()
+        val thumbnail = previewImage.resolutions?.lastOrNull() ?: return emptyList()
         val url = source.url.htmlUnescaped()
         val mimeType = parseMimeType(url)
         if (mimeType !in SUPPORTED_MIME_TYPES) {

@@ -20,6 +20,7 @@ import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
 import com.ammar.wallflow.IoDispatcher
 import com.ammar.wallflow.R
+import com.ammar.wallflow.data.repository.AppPreferencesRepository
 import com.ammar.wallflow.extensions.TAG
 import com.ammar.wallflow.extensions.getFileNameFromUrl
 import com.ammar.wallflow.extensions.getShareChooserIntent
@@ -42,6 +43,7 @@ import kotlin.math.absoluteValue
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 
 @HiltWorker
@@ -50,6 +52,7 @@ class DownloadWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     private val okHttpClient: OkHttpClient,
+    private val appPreferencesRepository: AppPreferencesRepository,
 ) : CoroutineWorker(
     context,
     params,
@@ -133,6 +136,22 @@ class DownloadWorker @AssistedInject constructor(
                     progressCallback = this@DownloadWorker::notifyProgress,
                 )
             }
+
+            val postToTelegram = inputData.getBoolean(INPUT_KEY_POST_TO_TELEGRAM, false)
+            if (postToTelegram) {
+                val telegramPrefs = appPreferencesRepository.appPreferencesFlow.first().telegramPreferences
+                if (telegramPrefs.enabled && telegramPrefs.isConfigured) {
+                    TelegramPostWorker.enqueue(
+                        context = context,
+                        fileUri = file.uri,
+                        fileName = file.name,
+                        tags = inputData.getStringArray(INPUT_KEY_TAGS),
+                        source = inputData.getString(INPUT_KEY_WALLPAPER_SOURCE),
+                        sourceUrl = inputData.getString(INPUT_KEY_URL),
+                    )
+                }
+            }
+
             if (wallpaperId != null) {
                 val tags = inputData.getStringArray(INPUT_KEY_TAGS) ?: emptyArray()
                 if (tags.isNotEmpty()) {
@@ -338,6 +357,7 @@ class DownloadWorker @AssistedInject constructor(
         const val INPUT_KEY_SCAN_FILE = "scan_file"
         const val INPUT_KEY_TAGS = "tags"
         const val INPUT_KEY_TAGS_WRITE_TYPE = "tags_write_type"
+        const val INPUT_KEY_POST_TO_TELEGRAM = "post_to_telegram"
         const val OUTPUT_KEY_ERROR = "error"
         const val OUTPUT_KEY_FILE_PATH = "output_file_path"
         const val PROGRESS_KEY_TOTAL = "total"

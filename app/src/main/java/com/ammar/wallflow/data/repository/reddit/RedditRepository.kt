@@ -16,7 +16,16 @@ interface RedditRepository {
         initialLoadSize: Int = pageSize * 2,
     ): Flow<PagingData<Wallpaper>>
 
+    fun wallpapersPagerGrouped(
+        search: RedditSearch,
+        pageSize: Int = 24,
+        prefetchDistance: Int = pageSize,
+        initialLoadSize: Int = pageSize * 2,
+    ): Flow<PagingData<Wallpaper>>
+
     fun wallpaper(wallpaperId: String): Flow<Resource<RedditWallpaper?>>
+
+    suspend fun galleryWallpapers(postId: String): List<Wallpaper>
 
     suspend fun insertWallpaperEntities(
         entities: Collection<RedditWallpaperEntity>,

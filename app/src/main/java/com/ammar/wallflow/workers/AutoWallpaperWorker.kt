@@ -823,6 +823,7 @@ class AutoWallpaperWorker @AssistedInject constructor(
                 } to nextPageNumber?.toString()
             }
             is RedditSearch -> {
+                if (search.filters.subreddits.isEmpty()) return emptyList<Wallpaper>() to null
                 val response = redditNetwork.search(search, page)
                 val after = response.data.after
                 return response.data.children.flatMap {

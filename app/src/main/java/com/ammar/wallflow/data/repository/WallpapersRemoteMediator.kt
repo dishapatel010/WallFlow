@@ -97,6 +97,10 @@ class WallpapersRemoteMediator<T : Search, U : OnlineSourceWallpaperEntity>(
                         ?: return MediatorResult.Success(endOfPaginationReached = true)
                 }
             }
+            // A RedditSearch with no subreddits must not reach the network layer.
+            if (search is RedditSearch && search.filters.subreddits.isEmpty()) {
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
             val response = when (network) {
                 is WallhavenNetworkDataSource -> network.search(
                     search = search as WallhavenSearch,
@@ -215,6 +219,8 @@ class WallpapersRemoteMediator<T : Search, U : OnlineSourceWallpaperEntity>(
         } catch (e: IOException) {
             MediatorResult.Error(e)
         } catch (e: HttpException) {
+            MediatorResult.Error(e)
+        } catch (e: IllegalArgumentException) {
             MediatorResult.Error(e)
         }
     }

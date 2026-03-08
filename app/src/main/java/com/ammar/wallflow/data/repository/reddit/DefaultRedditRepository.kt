@@ -57,6 +57,32 @@ class DefaultRedditRepository @Inject constructor(
         }
     }.flowOn(ioDispatcher)
 
+    @OptIn(ExperimentalPagingApi::class)
+    override fun wallpapersPagerGrouped(
+        search: RedditSearch,
+        pageSize: Int,
+        prefetchDistance: Int,
+        initialLoadSize: Int,
+    ) = Pager(
+        config = PagingConfig(
+            pageSize = pageSize,
+            prefetchDistance = prefetchDistance,
+            initialLoadSize = initialLoadSize,
+        ),
+        remoteMediator = WallpapersRemoteMediator(
+            search,
+            appDatabase,
+            dataSource,
+        ),
+        pagingSourceFactory = {
+            wallpapersDao.pagingSourceGrouped(queryString = json.encodeToString(search))
+        },
+    ).flow.map {
+        it.map<RedditWallpaperEntity, Wallpaper> { entity ->
+            entity.toWallpaper()
+        }
+    }.flowOn(ioDispatcher)
+
     override fun wallpaper(wallpaperId: String): Flow<Resource<RedditWallpaper?>> = flow {
         val entity = wallpapersDao.getByRedditId(wallpaperId)
         if (entity == null) {
@@ -65,6 +91,13 @@ class DefaultRedditRepository @Inject constructor(
         }
         emit(Resource.Success(entity.toWallpaper()))
     }.flowOn(ioDispatcher)
+
+    override suspend fun galleryWallpapers(postId: String): List<Wallpaper> =
+        withContext(ioDispatcher) {
+            wallpapersDao.getByPostIds(listOf(postId))
+                .sortedBy { it.galleryPosition ?: -1 }
+                .map { it.toWallpaper() }
+        }
 
     override suspend fun insertWallpaperEntities(
         entities: Collection<RedditWallpaperEntity>,

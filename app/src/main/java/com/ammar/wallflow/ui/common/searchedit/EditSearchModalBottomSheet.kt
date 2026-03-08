@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.ammar.wallflow.extensions.toDp
 import com.ammar.wallflow.model.search.RedditSearch
+import com.ammar.wallflow.model.search.RedditSubredditFilter
 import com.ammar.wallflow.model.search.Search
 import com.ammar.wallflow.model.search.WallhavenSearch
 import com.ammar.wallflow.ui.common.AdaptiveBottomSheet
@@ -36,7 +37,9 @@ fun EditSearchModalBottomSheet(
     header: @Composable (ColumnScope.() -> Unit)? = null,
     showNSFW: Boolean = false,
     showQueryField: Boolean = true,
+    redditSubredditFilter: RedditSubredditFilter = RedditSubredditFilter(),
     onChange: (Search) -> Unit = {},
+    onRedditFilterChange: (RedditSubredditFilter) -> Unit = {},
     onErrorStateChange: (Boolean) -> Unit = {},
     onDismissRequest: () -> Unit = {},
 ) {
@@ -73,7 +76,9 @@ fun EditSearchModalBottomSheet(
             search = search,
             showQueryField = showQueryField,
             showNSFW = showNSFW,
+            redditSubredditFilter = redditSubredditFilter,
             onChange = onChange,
+            onRedditFilterChange = onRedditFilterChange,
             onErrorStateChange = onErrorStateChange,
             onMinResAddCustomResClick = { showMinResAddCustomResDialog = true },
             onResolutionsAddCustomResClick = { showResolutionsAddCustomResDialog = true },
@@ -127,7 +132,9 @@ fun EditSearchContent(
     search: Search = WallhavenSearch(),
     showQueryField: Boolean = true,
     showNSFW: Boolean = false,
+    redditSubredditFilter: RedditSubredditFilter = RedditSubredditFilter(),
     onChange: (Search) -> Unit = {},
+    onRedditFilterChange: (RedditSubredditFilter) -> Unit = {},
     onErrorStateChange: (Boolean) -> Unit = {},
     onMinResAddCustomResClick: () -> Unit = {},
     onResolutionsAddCustomResClick: () -> Unit = {},
@@ -146,7 +153,9 @@ fun EditSearchContent(
             modifier = modifier,
             search = search,
             showQueryField = showQueryField,
+            redditSubredditFilter = redditSubredditFilter,
             onChange = onChange,
+            onFilterChange = onRedditFilterChange,
             onErrorStateChange = onErrorStateChange,
         )
     }

@@ -45,6 +45,7 @@ class ChangeWallpaperActivity : ComponentActivity() {
                     Theme.LIGHT -> false
                     Theme.DARK -> true
                 },
+                accentColor = uiState.accentColor,
             ) {
                 if (!uiState.hasSources) {
                     NoSourcesDialog(

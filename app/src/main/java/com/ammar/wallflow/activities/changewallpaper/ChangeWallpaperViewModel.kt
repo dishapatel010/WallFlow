@@ -35,6 +35,7 @@ class ChangeWallpaperViewModel @Inject constructor(
         local.merge(
             ChangeWallpaperActivityUiState(
                 theme = appPreferences.lookAndFeelPreferences.theme,
+                accentColor = appPreferences.lookAndFeelPreferences.accentColor,
                 hasSources = appPreferences.autoWallpaperPreferences.anySourceEnabled,
             ),
         )
@@ -64,6 +65,7 @@ class ChangeWallpaperViewModel @Inject constructor(
 @Partialize
 data class ChangeWallpaperActivityUiState(
     val theme: Theme = Theme.SYSTEM,
+    val accentColor: Int? = null,
     val hasSources: Boolean = false,
     val autoWallpaperStatus: AutoWallpaperWorkerStatus? = null,
 )

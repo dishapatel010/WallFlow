@@ -152,15 +152,29 @@ fun WallpaperScreen(
                 shareWallpaper(context, viewerViewModel, wallpaper)
             },
             onApplyWallpaperClick = {
-                val wallpaper = viewerUiState.wallpaper ?: return@WallpaperViewer
+                val wallpaper = viewerUiState.galleryWallpapers?.getOrNull(viewerViewModel.currentGalleryPage)
+                    ?: viewerUiState.wallpaper ?: return@WallpaperViewer
                 applyWallpaper(context, viewerViewModel, wallpaper)
             },
             onTagClick = onTagClick,
             onUploaderClick = onUploaderClick,
             onDownloadPermissionsGranted = viewerViewModel::download,
+            onDownloadAllPermissionsGranted = viewerViewModel::downloadAll,
             onFavoriteToggle = { viewerViewModel.toggleFavorite() },
             onBackClick = { navController.popBackStack() },
             onLightDarkTypeFlagsChange = viewerViewModel::updateLightDarkTypeFlags,
+            showTelegramAction = viewerUiState.telegramEnabled && viewerUiState.telegramIsConfigured,
+            onPostToTelegramClick = {
+                val wallpaper = viewerUiState.galleryWallpapers?.getOrNull(viewerViewModel.currentGalleryPage)
+                    ?: viewerUiState.wallpaper ?: return@WallpaperViewer
+                viewerViewModel.postToTelegram(wallpaper)
+            },
+            galleryWallpapers = viewerUiState.galleryWallpapers,
+            galleryPageIndex = viewerUiState.galleryPageIndex,
+            onGalleryPageChange = viewerViewModel::setGalleryPage,
+            showGalleryFavScopeDialog = viewerUiState.showGalleryFavDialog,
+            onGalleryFavScopeSelected = viewerViewModel::toggleFavoriteScope,
+            onGalleryFavScopeDismiss = viewerViewModel::dismissGalleryFavDialog,
         )
     }
 }

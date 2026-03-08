@@ -25,6 +25,7 @@ class MainActivityViewModel @Inject constructor(
         local.merge(
             MainUiState(
                 theme = appPreferences.lookAndFeelPreferences.theme,
+                accentColor = appPreferences.lookAndFeelPreferences.accentColor,
             ),
         )
     }.stateIn(
@@ -37,4 +38,5 @@ class MainActivityViewModel @Inject constructor(
 @Partialize
 data class MainUiState(
     val theme: Theme = Theme.SYSTEM,
+    val accentColor: Int? = null,
 )

@@ -33,6 +33,7 @@ class CrashReportViewModel @Inject constructor(
     ) { local, appPreferences ->
         local.merge(
             CrashReportUiState(
+                accentColor = appPreferences.lookAndFeelPreferences.accentColor,
                 acraEnabled = appPreferences.acraEnabled,
             ),
         )
@@ -61,5 +62,6 @@ class CrashReportViewModel @Inject constructor(
 @Stable
 data class CrashReportUiState(
     val reportData: ImmutableMap<ReportField, String> = persistentMapOf(),
+    val accentColor: Int? = null,
     val acraEnabled: Boolean = true,
 )

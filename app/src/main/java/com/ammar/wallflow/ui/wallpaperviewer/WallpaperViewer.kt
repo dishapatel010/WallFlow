@@ -16,10 +16,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +37,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +70,7 @@ import com.ammar.wallflow.extensions.toast
 import com.ammar.wallflow.extensions.wallpaperManager
 import com.ammar.wallflow.model.DownloadableWallpaper
 import com.ammar.wallflow.model.LightDarkType
+import com.ammar.wallflow.model.Source
 import com.ammar.wallflow.model.Wallpaper
 import com.ammar.wallflow.model.reddit.RedditWallpaper
 import com.ammar.wallflow.model.reddit.withRedditDomainPrefix
@@ -82,6 +91,7 @@ import me.saket.telephoto.zoomable.ZoomSpec
 import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.zoomable
 
+@Suppress("UNUSED_PARAMETER")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WallpaperViewer(
@@ -105,21 +115,38 @@ fun WallpaperViewer(
     onApplyWallpaperClick: () -> Unit = {},
     onFullScreenClick: () -> Unit = {},
     onDownloadPermissionsGranted: () -> Unit = {},
+    onDownloadAllPermissionsGranted: () -> Unit = {},
     onTagClick: (WallhavenTag) -> Unit = {},
     onUploaderClick: (WallhavenUploader) -> Unit = {},
     onFavoriteToggle: (Boolean) -> Unit = {},
     onBackClick: () -> Unit = {},
     onLightDarkTypeFlagsChange: (Int) -> Unit = {},
+    showTelegramAction: Boolean = false,
+    onPostToTelegramClick: () -> Unit = {},
+    galleryWallpapers: List<Wallpaper>? = null,
+    galleryPageIndex: Int = 0,
+    onGalleryPageChange: (Int) -> Unit = {},
+    showGalleryFavScopeDialog: Boolean = false,
+    onGalleryFavScopeSelected: (all: Boolean) -> Unit = {},
+    onGalleryFavScopeDismiss: () -> Unit = {},
 ) {
     val clipboardManager = LocalClipboardManager.current
     val layoutDirection = LocalLayoutDirection.current
     var showRationale by rememberSaveable { mutableStateOf(false) }
     var containerIntSize by remember { mutableStateOf(IntSize.Zero) }
     var showLightDarkInfo by rememberSaveable { mutableStateOf(false) }
+    var pendingDownloadAll by rememberSaveable { mutableStateOf(false) }
 
     val downloadPermissionsState = rememberDownloadPermissionsState(
         onShowRationale = { showRationale = true },
-        onGranted = onDownloadPermissionsGranted,
+        onGranted = {
+            if (pendingDownloadAll) {
+                pendingDownloadAll = false
+                onDownloadAllPermissionsGranted()
+            } else {
+                onDownloadPermissionsGranted()
+            }
+        },
     )
 
     // val imageSize: IntSize by produceState(
@@ -229,6 +256,30 @@ fun WallpaperViewer(
             wallpaperManager.isWallpaperSupported && wallpaperManager.isSetWallpaperAllowed
         }
     }
+    val inGalleryMode = galleryWallpapers != null && galleryWallpapers.size > 1
+    // True when the wallpaper is a gallery cover but siblings aren't cached yet.
+    val galleryIncomplete = !loading &&
+        wallpaper is RedditWallpaper &&
+        (wallpaper as RedditWallpaper).galleryPosition != null &&
+        !inGalleryMode
+    val pageCount = galleryWallpapers?.size ?: 1
+    val pagerState = rememberPagerState(
+        initialPage = galleryPageIndex.coerceIn(0, (galleryWallpapers?.lastIndex ?: 0).coerceAtLeast(0)),
+        pageCount = { pageCount },
+    )
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (inGalleryMode) onGalleryPageChange(page)
+        }
+    }
+    LaunchedEffect(galleryPageIndex, inGalleryMode) {
+        if (inGalleryMode && pagerState.currentPage != galleryPageIndex) {
+            pagerState.scrollToPage(galleryPageIndex)
+        }
+    }
+    val singleImageReady = !inGalleryMode &&
+        painter.state is AsyncImagePainter.State.Success &&
+        painter.request.data == wallpaper?.data
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -250,62 +301,128 @@ fun WallpaperViewer(
             )
             .onSizeChanged { containerIntSize = it },
     ) {
-        Crossfade(
-            modifier = Modifier.fillMaxSize(),
-            targetState = painter,
-            label = "wallpaper",
-        ) {
-            val imageRequest = it.request
-            if (
-                isExpanded && // means two pane mode
-                it.state !is AsyncImagePainter.State.Loading &&
-                imageRequest.data is NullRequestData
-            ) {
-                NotSelectedPlaceholder(
-                    containerIntSize = containerIntSize,
+        if (inGalleryMode) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                GalleryPageImage(
+                    wallpaper = galleryWallpapers!![page],
+                    thumbData = if (page == 0) thumbData else null,
+                    lifecycleOwner = lifecycleOwner,
+                    listener = listener,
+                    onWallpaperTap = onWallpaperTap,
+                    onWallpaperTransform = onWallpaperTransform,
                 )
-                return@Crossfade
             }
-            Image(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zoomable(
-                        state = zoomableState,
-                        onClick = { _ ->
-                            if (it.state !is AsyncImagePainter.State.Success) {
-                                return@zoomable
-                            }
-                            onWallpaperTap()
-                        },
-                    ),
-                painter = it,
-                contentDescription = stringResource(R.string.wallpaper),
-            )
+        } else {
+            Crossfade(
+                modifier = Modifier.fillMaxSize(),
+                targetState = painter,
+                label = "wallpaper",
+            ) {
+                val imageRequest = it.request
+                if (
+                    isExpanded && // means two pane mode
+                    it.state !is AsyncImagePainter.State.Loading &&
+                    imageRequest.data is NullRequestData
+                ) {
+                    NotSelectedPlaceholder(
+                        containerIntSize = containerIntSize,
+                    )
+                    return@Crossfade
+                }
+                Image(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zoomable(
+                            state = zoomableState,
+                            onClick = { _ ->
+                                if (it.state !is AsyncImagePainter.State.Success) {
+                                    return@zoomable
+                                }
+                                onWallpaperTap()
+                            },
+                        ),
+                    painter = it,
+                    contentDescription = stringResource(R.string.wallpaper),
+                )
+            }
         }
 
-        AnimatedVisibility(
+        Column(
             modifier = Modifier.align(Alignment.BottomCenter),
-            visible = painter.state is AsyncImagePainter.State.Success &&
-                painter.request.data == wallpaper?.data &&
-                actionsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            WallpaperActions(
-                downloadStatus = downloadStatus,
-                showApplyWallpaperAction = applyWallpaperEnabled,
-                showFullScreenAction = isExpanded,
-                showDownloadAction = wallpaper is DownloadableWallpaper,
-                isFavorite = isFavorite,
-                lightDarkTypeFlags = lightDarkTypeFlags,
-                onDownloadClick = { downloadPermissionsState.launchMultiplePermissionRequest() },
-                onApplyWallpaperClick = onApplyWallpaperClick,
-                onFullScreenClick = onFullScreenClick,
-                onFavoriteToggle = onFavoriteToggle,
-                onLightDarkTypeFlagsChange = onLightDarkTypeFlagsChange,
-                onShowLightDarkInfoClick = { showLightDarkInfo = true },
-                onInfoClick = onInfoClick,
-            )
+            AnimatedVisibility(
+                visible = galleryIncomplete && actionsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                AssistChip(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    onClick = {
+                        val url = (wallpaper as? RedditWallpaper)
+                            ?.postUrl
+                            ?.withRedditDomainPrefix()
+                        if (url != null) context.openUrl(url)
+                    },
+                    label = { Text(stringResource(R.string.gallery_incomplete_hint)) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.outline_open_in_browser_24),
+                            contentDescription = null,
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            .copy(alpha = 0.85f),
+                    ),
+                )
+            }
+            AnimatedVisibility(
+                visible = (inGalleryMode || singleImageReady) && actionsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                WallpaperActions(
+                    downloadStatus = downloadStatus,
+                    showApplyWallpaperAction = applyWallpaperEnabled,
+                    showFullScreenAction = isExpanded,
+                    showDownloadAction = wallpaper is DownloadableWallpaper,
+                    inGalleryMode = inGalleryMode,
+                    galleryPageCount = pageCount,
+                    isFavorite = isFavorite,
+                    lightDarkTypeFlags = lightDarkTypeFlags,
+                    onDownloadClick = {
+                        pendingDownloadAll = false
+                        downloadPermissionsState.launchMultiplePermissionRequest()
+                    },
+                    onDownloadAllClick = {
+                        pendingDownloadAll = true
+                        downloadPermissionsState.launchMultiplePermissionRequest()
+                    },
+                    onApplyWallpaperClick = {
+                        // Sync the settled page to ViewModel before the outer callback fires,
+                        // so callers can read currentGalleryPage without an async lag.
+                        if (inGalleryMode) onGalleryPageChange(pagerState.currentPage)
+                        onApplyWallpaperClick()
+                    },
+                    onFullScreenClick = onFullScreenClick,
+                    onFavoriteToggle = { isFav ->
+                        if (inGalleryMode) onGalleryPageChange(pagerState.currentPage)
+                        onFavoriteToggle(isFav)
+                    },
+                    onLightDarkTypeFlagsChange = onLightDarkTypeFlagsChange,
+                    onShowLightDarkInfoClick = { showLightDarkInfo = true },
+                    onInfoClick = onInfoClick,
+                    showTelegramAction = showTelegramAction,
+                    onPostToTelegramClick = {
+                        if (inGalleryMode) onGalleryPageChange(pagerState.currentPage)
+                        onPostToTelegramClick()
+                    },
+                )
+            }
         }
 
         // AnimatedVisibility(
@@ -328,24 +445,36 @@ fun WallpaperViewer(
                 TopAppBarDefaults.windowInsets
             },
             visible = if (isExpanded) {
-                painter.state is AsyncImagePainter.State.Success &&
-                    painter.request.data == wallpaper?.data &&
-                    actionsVisible
+                (inGalleryMode || singleImageReady) && actionsVisible
             } else {
                 actionsVisible
             },
             gradientBg = if (showBackButton) {
                 true
             } else {
-                painter.state is AsyncImagePainter.State.Success &&
-                    painter.request.data == wallpaper?.data
+                inGalleryMode || singleImageReady
             },
             showBackButton = showBackButton,
             onBackClick = onBackClick,
             actions = {
+                // Gallery page counter shown inline next to the share button
+                if (inGalleryMode) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = "${pagerState.currentPage + 1} / $pageCount",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
                 AnimatedVisibility(
-                    visible = painter.state is AsyncImagePainter.State.Success &&
-                        painter.request.data == wallpaper?.data,
+                    visible = inGalleryMode || singleImageReady,
                     enter = fadeIn(),
                     exit = fadeOut(),
                 ) {
@@ -358,6 +487,7 @@ fun WallpaperViewer(
                 }
             },
         )
+
     }
 
     if (showInfo) {
@@ -392,6 +522,25 @@ fun WallpaperViewer(
         )
     }
 
+    if (showGalleryFavScopeDialog) {
+        val gallerySize = galleryWallpapers?.size ?: 0
+        AlertDialog(
+            onDismissRequest = onGalleryFavScopeDismiss,
+            title = { Text(stringResource(R.string.gallery_fav_title)) },
+            text = { Text(stringResource(R.string.gallery_fav_message)) },
+            confirmButton = {
+                TextButton(onClick = { onGalleryFavScopeSelected(true) }) {
+                    Text(stringResource(R.string.all_images, gallerySize))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onGalleryFavScopeSelected(false) }) {
+                    Text(stringResource(R.string.this_image_only))
+                }
+            },
+        )
+    }
+
     if (showLightDarkInfo) {
         LightDarkInfoDialog(
             onDismissRequest = { showLightDarkInfo = false },
@@ -406,6 +555,72 @@ private fun Wallpaper.getSourceUrl(): String? {
         else -> null
     }
     return url
+}
+
+@Composable
+private fun GalleryPageImage(
+    wallpaper: Wallpaper,
+    thumbData: String?,
+    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    listener: ImageRequest.Listener,
+    onWallpaperTap: () -> Unit,
+    onWallpaperTransform: () -> Unit,
+) {
+    val context = LocalContext.current
+    val request by produceState(
+        initialValue = null as ImageRequest?,
+        key1 = context,
+        key2 = wallpaper.data,
+        key3 = listOf(thumbData, listener),
+    ) {
+        value = ImageRequest.Builder(context).apply {
+            data(wallpaper.data)
+            if (thumbData != null) placeholderMemoryCacheKey(thumbData)
+            scale(Scale.FIT)
+            crossfade(true)
+            lifecycle(lifecycleOwner)
+            listener(listener)
+        }.build()
+    }
+    val painter = rememberAsyncImagePainter(model = request)
+    val zoomableState = rememberZoomableState(ZoomSpec(maxZoomFactor = 5f))
+    var hasTransformed by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(wallpaper.data) {
+        zoomableState.resetZoom(false)
+    }
+
+    LaunchedEffect(zoomableState.contentTransformation, painter) {
+        val scale = zoomableState.contentTransformation.scale
+        if (
+            painter.state !is AsyncImagePainter.State.Success ||
+            painter.request.data is NullRequestData ||
+            scale == ScaleFactor(0f, 0f)
+        ) {
+            return@LaunchedEffect
+        }
+        if (!hasTransformed && scale.scaleX <= 1f) {
+            return@LaunchedEffect
+        }
+        onWallpaperTransform()
+        hasTransformed = true
+    }
+
+    Image(
+        modifier = Modifier
+            .fillMaxSize()
+            .zoomable(
+                state = zoomableState,
+                onClick = { _ ->
+                    if (painter.state !is AsyncImagePainter.State.Success) {
+                        return@zoomable
+                    }
+                    onWallpaperTap()
+                },
+            ),
+        painter = painter,
+        contentDescription = stringResource(R.string.wallpaper),
+    )
 }
 
 @Composable

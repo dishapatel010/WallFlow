@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
@@ -21,21 +22,24 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.BottomAppBarDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
@@ -75,6 +79,7 @@ import com.ammar.wallflow.ui.theme.WallFlowTheme
 import com.ammar.wallflow.utils.DownloadStatus
 import kotlinx.datetime.Clock
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WallpaperActions(
     modifier: Modifier = Modifier,
@@ -82,48 +87,105 @@ fun WallpaperActions(
     showApplyWallpaperAction: Boolean = true,
     showFullScreenAction: Boolean = false,
     showDownloadAction: Boolean = true,
+    inGalleryMode: Boolean = false,
+    galleryPageCount: Int = 0,
     isFavorite: Boolean = false,
     lightDarkTypeFlags: Int = LightDarkType.UNSPECIFIED,
     onDownloadClick: () -> Unit = {},
+    onDownloadAllClick: () -> Unit = {},
     onApplyWallpaperClick: () -> Unit = {},
     onFullScreenClick: () -> Unit = {},
     onFavoriteToggle: (Boolean) -> Unit = {},
     onLightDarkTypeFlagsChange: (Int) -> Unit = {},
     onShowLightDarkInfoClick: () -> Unit = {},
     onInfoClick: () -> Unit = {},
+    showTelegramAction: Boolean = false,
+    onPostToTelegramClick: () -> Unit = {},
 ) {
-    BottomAppBar(
-        modifier = modifier,
-        containerColor = BottomAppBarDefaults.containerColor.copy(alpha = 0.8f),
-        actions = {
-            if (showFullScreenAction) {
-                FullScreenButton(onClick = onFullScreenClick)
-            }
-            InfoButton(onClick = onInfoClick)
-            FavoriteButton(
-                isFavorite = isFavorite,
-                onToggle = onFavoriteToggle,
-            )
-            if (showDownloadAction) {
+    HorizontalFloatingToolbar(
+        expanded = showApplyWallpaperAction,
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(bottom = 16.dp),
+        trailingContent = if (showApplyWallpaperAction) {
+            { ApplyWallpaperFAB(onClick = onApplyWallpaperClick) }
+        } else {
+            null
+        },
+    ) {
+        if (showFullScreenAction) {
+            FullScreenButton(onClick = onFullScreenClick)
+        }
+        InfoButton(onClick = onInfoClick)
+        FavoriteButton(
+            isFavorite = isFavorite,
+            onToggle = onFavoriteToggle,
+        )
+        if (showDownloadAction) {
+            if (inGalleryMode) {
+                var showDownloadMenu by remember { mutableStateOf(false) }
+                Box {
+                    SplitButtonLayout(
+                        leadingButton = {
+                            SplitButtonDefaults.LeadingButton(
+                                onClick = onDownloadClick,
+                            ) {
+                                Icon(
+                                    modifier = Modifier.size(18.dp),
+                                    painter = painterResource(R.drawable.outline_file_download_24),
+                                    contentDescription = null,
+                                )
+                                Spacer(modifier = Modifier.requiredWidth(4.dp))
+                                Text(text = stringResource(R.string.download_this))
+                            }
+                        },
+                        trailingButton = {
+                            SplitButtonDefaults.TrailingButton(
+                                checked = showDownloadMenu,
+                                onCheckedChange = { showDownloadMenu = it },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowDropDown,
+                                    contentDescription = null,
+                                )
+                            }
+                        },
+                    )
+                    DropdownMenu(
+                        expanded = showDownloadMenu,
+                        onDismissRequest = { showDownloadMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(text = stringResource(R.string.download_all, galleryPageCount)) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.outline_file_download_24),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                showDownloadMenu = false
+                                onDownloadAllClick()
+                            },
+                        )
+                    }
+                }
+            } else {
                 DownloadButton(
                     downloadStatus = downloadStatus,
                     onClick = onDownloadClick,
                 )
             }
-            LightDarkButton(
-                typeFlags = lightDarkTypeFlags,
-                onFlagsChange = onLightDarkTypeFlagsChange,
-                onShowLightDarkInfoClick = onShowLightDarkInfoClick,
-            )
-        },
-        floatingActionButton = if (showApplyWallpaperAction) {
-            {
-                ApplyWallpaperFAB(onClick = onApplyWallpaperClick)
-            }
-        } else {
-            null
-        },
-    )
+        }
+        LightDarkButton(
+            typeFlags = lightDarkTypeFlags,
+            onFlagsChange = onLightDarkTypeFlagsChange,
+            onShowLightDarkInfoClick = onShowLightDarkInfoClick,
+        )
+        if (showTelegramAction) {
+            TelegramButton(onClick = onPostToTelegramClick)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -142,11 +204,9 @@ private fun ApplyWallpaperFAB(
             }
         },
     ) {
-        FloatingActionButton(
+        SmallFloatingActionButton(
             modifier = modifier,
             onClick = onClick,
-            containerColor = BottomAppBarDefaults.bottomAppBarFabColor,
-            elevation = FloatingActionButtonDefaults.bottomAppBarFabElevation(),
         ) {
             Icon(
                 painter = painterResource(R.drawable.outline_wallpaper_24),
@@ -476,6 +536,34 @@ internal fun FavoriteButton(
                     },
                 ),
                 contentDescription = stringResource(R.string.favorite),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TelegramButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
+    TooltipBox(
+        modifier = modifier,
+        positionProvider = rememberPlainTooltipPositionProvider(),
+        state = rememberTooltipState(),
+        tooltip = {
+            PlainTooltip {
+                Text(text = stringResource(R.string.post_to_telegram))
+            }
+        },
+    ) {
+        IconButton(
+            modifier = modifier,
+            onClick = onClick,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.baseline_send_24),
+                contentDescription = stringResource(R.string.post_to_telegram),
             )
         }
     }

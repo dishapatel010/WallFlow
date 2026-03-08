@@ -91,6 +91,48 @@ interface RedditWallpapersDao : WallpapersDao {
     )
     fun pagingSource(queryString: String): PagingSource<Int, RedditWallpaperEntity>
 
+    /**
+     * Grouped paging source for carousel mode.
+     * Returns only the cover image for each gallery post (gallery_pos IS NULL OR gallery_pos = 0).
+     * Single-image posts have gallery_pos = NULL so they are included as-is.
+     */
+    @Query(
+        """
+            SELECT rw.*
+            FROM reddit_wallpapers rw
+            INNER JOIN reddit_search_query_wallpapers rsqw
+                ON rw.id = rsqw.wallpaper_id
+            WHERE rsqw.search_query_id = (
+                SELECT sq.id
+                FROM search_query sq
+                WHERE query_string = :queryString
+            )
+            AND (rw.gallery_pos IS NULL OR rw.gallery_pos = 0)
+            ORDER BY COALESCE(rsqw.`order`, rw.ROWID)
+        """,
+    )
+    fun pagingSourceGrouped(queryString: String): PagingSource<Int, RedditWallpaperEntity>
+
+    /**
+     * Returns the number of images in the gallery for a given post within a search query.
+     * Used to show image count badge on the cover card.
+     */
+    @Query(
+        """
+            SELECT COUNT(*)
+            FROM reddit_wallpapers rw
+            INNER JOIN reddit_search_query_wallpapers rsqw
+                ON rw.id = rsqw.wallpaper_id
+            WHERE rsqw.search_query_id = (
+                SELECT sq.id
+                FROM search_query sq
+                WHERE query_string = :queryString
+            )
+            AND rw.post_id = :postId
+        """,
+    )
+    suspend fun galleryCountForPost(postId: String, queryString: String): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(wallpapers: Collection<RedditWallpaperEntity>): List<Long>
 

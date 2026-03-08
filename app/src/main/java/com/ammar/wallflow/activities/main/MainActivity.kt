@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
             isStatusBarLight = systemState.isStatusBarLight,
         )
 
-        WallFlowTheme(darkTheme = darkTheme) {
+        WallFlowTheme(darkTheme = darkTheme, accentColor = uiState.accentColor) {
             Surface(
                 modifier = Modifier
                     .fillMaxSize()

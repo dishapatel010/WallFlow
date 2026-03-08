@@ -274,7 +274,7 @@
     <string name="auto_wallpaper_notification_desc">Duvar kağıdı değiştirildikten sonra bildirim göster</string>
     <string name="wallpaper_changed">Duvar kağıdı değişti!</string>
     <string name="dim_with_icon">Simgeli karartılmış</string>
-    <string name="app_name">WallFlow</string>
+    <string name="app_name">Wandverzierung</string>
     <string name="auto_wallpaper_download_desc">Otomatik duvar kağıdında kullanıldığında duvar kağıdını indir</string>
     <string name="one_hour">1 saat</string>
     <string name="no_local_dirs">Yerel klasörler eklenmedi</string>

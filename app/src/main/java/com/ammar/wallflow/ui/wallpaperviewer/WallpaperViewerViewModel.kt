@@ -16,6 +16,7 @@ import com.ammar.wallflow.model.DownloadableWallpaper
 import com.ammar.wallflow.model.LightDarkType
 import com.ammar.wallflow.model.Source
 import com.ammar.wallflow.model.Wallpaper
+import com.ammar.wallflow.model.reddit.RedditWallpaper
 import com.ammar.wallflow.model.wallhaven.WallhavenWallpaper
 import com.ammar.wallflow.utils.DownloadManager
 import com.ammar.wallflow.utils.DownloadStatus
@@ -49,7 +50,7 @@ class WallpaperViewerViewModel @Inject constructor(
     private val localWallpapersRepository: LocalWallpapersRepository,
     private val downloadManager: DownloadManager,
     private val favoritesRepository: FavoritesRepository,
-    appPreferencesRepository: AppPreferencesRepository,
+    private val appPreferencesRepository: AppPreferencesRepository,
     private val viewedRepository: ViewedRepository,
     private val lightDarkRepository: LightDarkRepository,
 ) : AndroidViewModel(
@@ -57,6 +58,7 @@ class WallpaperViewerViewModel @Inject constructor(
 ) {
     private val localUiState = MutableStateFlow(WallpaperViewerUiStatePartial())
     private val argsFlow = MutableStateFlow(WallpaperViewerArgs())
+    private val galleryPageIndexFlow = MutableStateFlow(0)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val wallpaperFlow = argsFlow.flatMapLatest {
@@ -83,8 +85,45 @@ class WallpaperViewerViewModel @Inject constructor(
         initialValue = Resource.Loading(null),
     )
 
+    // Gallery wallpapers: loaded when a Reddit gallery image is opened with carousel enabled
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val isFavoriteFlow = wallpaperFlow.flatMapLatest {
+    private val galleryWallpapersFlow = kotlinx.coroutines.flow.combine(
+        wallpaperFlow,
+        appPreferencesRepository.appPreferencesFlow,
+    ) { wp, prefs -> wp to prefs }.flatMapLatest { (wallpaperResource, prefs) ->
+        val wallpaper = wallpaperResource.successOr(null)
+        val showCarousel = prefs.lookAndFeelPreferences.layoutPreferences.showCarousel
+        if (wallpaper == null || !showCarousel || wallpaper !is RedditWallpaper ||
+            wallpaper.galleryPosition == null
+        ) {
+            flowOf<List<Wallpaper>?>(null)
+        } else {
+            flow {
+                val siblings = redditRepository.galleryWallpapers(wallpaper.postId)
+                emit(if (siblings.size <= 1) null else siblings)
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null,
+    )
+
+    // Active wallpaper = the wallpaper on the current gallery page, or the single wallpaper
+    private val activeWallpaperFlow = kotlinx.coroutines.flow.combine(
+        wallpaperFlow,
+        galleryWallpapersFlow,
+        galleryPageIndexFlow,
+    ) { wallpaperResource, gallery, pageIndex ->
+        gallery?.getOrNull(pageIndex)?.let { Resource.Success(it) } ?: wallpaperResource
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = Resource.Loading(null),
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val isFavoriteFlow = activeWallpaperFlow.flatMapLatest {
         val wallpaper = it.successOr(null) ?: return@flatMapLatest flowOf(false)
         return@flatMapLatest favoritesRepository.observeIsFavorite(
             source = wallpaper.source,
@@ -97,7 +136,7 @@ class WallpaperViewerViewModel @Inject constructor(
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val lightDarkTypeFlags = wallpaperFlow.flatMapLatest {
+    private val lightDarkTypeFlags = activeWallpaperFlow.flatMapLatest {
         val wallpaper = it.successOr(null) ?: return@flatMapLatest flowOf(LightDarkType.UNSPECIFIED)
         lightDarkRepository.observeTypeFlags(
             source = wallpaper.source,
@@ -111,11 +150,13 @@ class WallpaperViewerViewModel @Inject constructor(
 
     val uiState = combine(
         localUiState,
-        wallpaperFlow,
+        activeWallpaperFlow,
         argsFlow,
         isFavoriteFlow,
         appPreferencesRepository.appPreferencesFlow,
         lightDarkTypeFlags,
+        galleryWallpapersFlow,
+        galleryPageIndexFlow,
     ) {
             local,
             wallpaper,
@@ -123,6 +164,8 @@ class WallpaperViewerViewModel @Inject constructor(
             isFavorite,
             appPreferences,
             lightDarkTypeFlags,
+            galleryWallpapers,
+            galleryPageIndex,
         ->
         local.merge(
             WallpaperViewerUiState(
@@ -134,6 +177,10 @@ class WallpaperViewerViewModel @Inject constructor(
                 tagsExifWriteType = appPreferences.tagsExifWriteType,
                 rememberViewedWallpapers = appPreferences.viewedWallpapersPreferences.enabled,
                 lightDarkTypeFlags = lightDarkTypeFlags ?: LightDarkType.UNSPECIFIED,
+                telegramEnabled = appPreferences.telegramPreferences.enabled,
+                telegramIsConfigured = appPreferences.telegramPreferences.isConfigured,
+                galleryWallpapers = galleryWallpapers,
+                galleryPageIndex = galleryPageIndex,
             ),
         )
     }.stateIn(
@@ -143,9 +190,17 @@ class WallpaperViewerViewModel @Inject constructor(
     )
 
     init {
+        // When the primary wallpaper changes, seed the page index from its galleryPosition
+        // so opening any gallery page (not just the cover) lands on the right page.
+        viewModelScope.launch {
+            wallpaperFlow.collectLatest { resource ->
+                val wp = resource.successOr(null)
+                galleryPageIndexFlow.value = (wp as? RedditWallpaper)?.galleryPosition ?: 0
+            }
+        }
         viewModelScope.launch {
             combine(
-                wallpaperFlow,
+                activeWallpaperFlow,
                 appPreferencesRepository.appPreferencesFlow,
             ) { wallpaper, appPreferences ->
                 wallpaper to appPreferences.viewedWallpapersPreferences.enabled
@@ -192,66 +247,147 @@ class WallpaperViewerViewModel @Inject constructor(
         it.copy(showInfo = partial(show))
     }
 
+    /** Called from the full wallpaper viewer – wallpaper is already in [uiState]. */
+    fun postToTelegram() = postToTelegramInternal(uiState.value.wallpaper)
+
+    /**
+     * Called from quick-action handlers that already have the [Wallpaper] object.
+     * Using an overload instead of a default parameter keeps the no-arg [postToTelegram]
+     * usable as a `() -> Unit` function reference in [WallpaperScreen].
+     */
+    fun postToTelegram(wallpaper: Wallpaper) = postToTelegramInternal(wallpaper)
+
+    private fun postToTelegramInternal(wallpaper: Wallpaper?) {
+        if (wallpaper == null || wallpaper !is DownloadableWallpaper) return
+        viewModelScope.launch {
+            val state = uiState.value
+            val tags = if (state.writeTagsToExif && wallpaper is WallhavenWallpaper) {
+                wallpaper.tags?.map { it.name }
+            } else {
+                null
+            }
+            downloadManager.requestDownload(
+                context = application,
+                wallpaper = wallpaper,
+                tags = tags,
+                tagsExifWriteType = state.tagsExifWriteType,
+                postToTelegram = true,
+            )
+        }
+    }
+
     fun download() {
+        download(uiState.value.wallpaper ?: return)
+    }
+
+    fun downloadAll() {
+        val wallpapers = uiState.value.galleryWallpapers
+            ?.filterIsInstance<DownloadableWallpaper>()
+            ?.filterIsInstance<Wallpaper>()
+        if (!wallpapers.isNullOrEmpty()) {
+            wallpapers.forEach { download(it) }
+        } else {
+            download()
+        }
+    }
+
+    /**
+     * Downloads [wallpaper] directly without touching [argsFlow]. Safe to call from quick-action
+     * handlers that already hold the target wallpaper (e.g. grid long-press) so the open viewer
+     * state is never disrupted.
+     */
+    fun download(wallpaper: Wallpaper) {
+        if (wallpaper !is DownloadableWallpaper) return
         var job: Job? = null
         job = viewModelScope.launch {
             val uiState = uiState.value
-            uiState.wallpaper?.run {
-                if (this !is DownloadableWallpaper) {
-                    return@run
-                }
-                val tags = if (uiState.writeTagsToExif && this is WallhavenWallpaper) {
-                    this.tags?.map { it.name }
-                } else {
-                    null
-                }
-                val workName = downloadManager.requestDownload(
-                    context = application,
-                    wallpaper = this,
-                    tags = tags,
-                    tagsExifWriteType = uiState.tagsExifWriteType,
-                )
-                downloadManager.getProgress(
-                    context = application,
-                    workName = workName,
-                ).collectLatest { state ->
-                    localUiState.update { it.copy(downloadStatus = partial(state)) }
-                    if (state.isSuccessOrFail()) {
-                        job?.cancel()
-                    }
+            val tags = if (uiState.writeTagsToExif && wallpaper is WallhavenWallpaper) {
+                wallpaper.tags?.map { it.name }
+            } else {
+                null
+            }
+            val workName = downloadManager.requestDownload(
+                context = application,
+                wallpaper = wallpaper,
+                tags = tags,
+                tagsExifWriteType = uiState.tagsExifWriteType,
+            )
+            downloadManager.getProgress(
+                context = application,
+                workName = workName,
+            ).collectLatest { state ->
+                localUiState.update { it.copy(downloadStatus = partial(state)) }
+                if (state.isSuccessOrFail()) {
+                    job?.cancel()
                 }
             }
         }
     }
 
     fun downloadForSharing(onResult: (file: File?) -> Unit) {
-        uiState.value.wallpaper?.run {
-            if (this !is DownloadableWallpaper) {
-                return@run
-            }
-            var job: Job? = null
-            job = viewModelScope.launch {
-                downloadManager.downloadWallpaperAsync(
-                    context = application,
-                    wallpaper = this@run,
-                    onLoadingChange = { loading ->
-                        localUiState.update { it.copy(loading = partial(loading)) }
-                    },
-                    onResult = {
-                        onResult(it)
-                        job?.cancel()
-                    },
-                )
-            }
+        downloadForSharing(uiState.value.wallpaper ?: return, onResult)
+    }
+
+    /**
+     * Downloads [wallpaper] for sharing/applying without touching [argsFlow]. Safe to call from
+     * quick-action handlers that already hold the target wallpaper.
+     */
+    fun downloadForSharing(wallpaper: Wallpaper, onResult: (file: File?) -> Unit) {
+        if (wallpaper !is DownloadableWallpaper) return
+        var job: Job? = null
+        job = viewModelScope.launch {
+            downloadManager.downloadWallpaperAsync(
+                context = application,
+                wallpaper = wallpaper,
+                onLoadingChange = { loading ->
+                    localUiState.update { it.copy(loading = partial(loading)) }
+                },
+                onResult = {
+                    onResult(it)
+                    job?.cancel()
+                },
+            )
         }
     }
 
     fun toggleFavorite() = viewModelScope.launch {
-        val wallpaper = uiState.value.wallpaper ?: return@launch
-        favoritesRepository.toggleFavorite(
-            sourceId = wallpaper.id,
-            source = wallpaper.source,
-        )
+        val state = uiState.value
+        val gallery = state.galleryWallpapers
+        if (gallery != null && gallery.size > 1) {
+            // Show scope-selection dialog instead of acting immediately.
+            localUiState.update { it.copy(showGalleryFavDialog = partial(true)) }
+        } else {
+            val wallpaper = state.wallpaper ?: return@launch
+            favoritesRepository.toggleFavorite(
+                sourceId = wallpaper.id,
+                source = wallpaper.source,
+            )
+        }
+    }
+
+    fun dismissGalleryFavDialog() = localUiState.update {
+        it.copy(showGalleryFavDialog = partial(false))
+    }
+
+    /** Toggle favorite for the active gallery page only, or for every image in the gallery. */
+    fun toggleFavoriteScope(all: Boolean) = viewModelScope.launch {
+        dismissGalleryFavDialog()
+        val state = uiState.value
+        val gallery = state.galleryWallpapers
+        if (all && gallery != null && gallery.size > 1) {
+            val isFav = state.isFavorite
+            gallery.forEach { gWp ->
+                if (isFav) favoritesRepository.removeFavorite(gWp.id, gWp.source)
+                else favoritesRepository.addFavorite(gWp.id, gWp.source)
+            }
+        } else {
+            val wallpaper = gallery?.getOrNull(state.galleryPageIndex)
+                ?: state.wallpaper ?: return@launch
+            favoritesRepository.toggleFavorite(
+                sourceId = wallpaper.id,
+                source = wallpaper.source,
+            )
+        }
     }
 
     fun updateLightDarkTypeFlags(flags: Int) = viewModelScope.launch {
@@ -262,6 +398,13 @@ class WallpaperViewerViewModel @Inject constructor(
             typeFlags = flags,
         )
     }
+
+    fun setGalleryPage(index: Int) {
+        galleryPageIndexFlow.value = index
+    }
+
+    /** Synchronous read of the current gallery page index — safe to call from action callbacks. */
+    val currentGalleryPage: Int get() = galleryPageIndexFlow.value
 }
 
 @Partialize
@@ -273,10 +416,15 @@ data class WallpaperViewerUiState(
     val downloadStatus: DownloadStatus? = null,
     val loading: Boolean = true,
     val isFavorite: Boolean = false,
+    val showGalleryFavDialog: Boolean = false,
     val writeTagsToExif: Boolean = false,
     val tagsExifWriteType: ExifWriteType = ExifWriteType.APPEND,
     val rememberViewedWallpapers: Boolean = false,
     val lightDarkTypeFlags: Int = LightDarkType.UNSPECIFIED,
+    val telegramEnabled: Boolean = false,
+    val telegramIsConfigured: Boolean = false,
+    val galleryWallpapers: List<Wallpaper>? = null,
+    val galleryPageIndex: Int = 0,
 )
 
 data class WallpaperViewerArgs(

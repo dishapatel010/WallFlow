@@ -56,7 +56,7 @@ fun shareWallpaper(
         )
         return
     }
-    viewModel.downloadForSharing {
+    viewModel.downloadForSharing(wallpaper) {
         if (it == null) return@downloadForSharing
         context.share(
             uri = context.getUriForFile(it),
@@ -87,7 +87,7 @@ fun applyWallpaper(
         startActivity(wallpaper.data)
         return
     }
-    viewModel.downloadForSharing {
+    viewModel.downloadForSharing(wallpaper) {
         val file = it ?: return@downloadForSharing
         val uri = context.getUriForFile(file)
         startActivity(uri)

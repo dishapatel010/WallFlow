@@ -1,0 +1,54 @@
+name: Release from Artifact
+
+permissions:
+  contents: write
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Build workflow run ID (number at the end of the Actions run URL)'
+        required: true
+        type: string
+      tag:
+        description: 'Release tag (e.g. v1.2.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download APKs from build run
+        uses: actions/download-artifact@v4
+        with:
+          name: apks
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: apks
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          draft: false
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            apks/plus/release/app-plus-arm64-v8a-release-unsigned.apk
+            apks/plus/release/app-plus-armeabi-v7a-release-unsigned.apk
+            apks/plus/release/app-plus-x86_64-release-unsigned.apk
+            apks/plus/release/app-plus-x86-release-unsigned.apk
+            apks/base/release/app-base-arm64-v8a-release-unsigned.apk
+            apks/base/release/app-base-armeabi-v7a-release-unsigned.apk
+            apks/base/release/app-base-x86_64-release-unsigned.apk
+            apks/base/release/app-base-x86-release-unsigned.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

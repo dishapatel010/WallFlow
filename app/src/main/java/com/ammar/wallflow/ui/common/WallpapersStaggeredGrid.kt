@@ -1,22 +1,31 @@
 package com.ammar.wallflow.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -25,6 +34,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
+import com.ammar.wallflow.R
 import com.ammar.wallflow.data.preferences.GridColType
 import com.ammar.wallflow.data.preferences.GridType
 import com.ammar.wallflow.data.preferences.ViewedWallpapersLook
@@ -36,6 +46,7 @@ import com.ammar.wallflow.model.LightDarkType
 import com.ammar.wallflow.model.Purity
 import com.ammar.wallflow.model.Viewed
 import com.ammar.wallflow.model.Wallpaper
+import com.ammar.wallflow.model.reddit.RedditWallpaper
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -60,7 +71,10 @@ fun WallpaperStaggeredGrid(
     viewedList: ImmutableList<Viewed> = persistentListOf(),
     viewedWallpapersLook: ViewedWallpapersLook = ViewedWallpapersLook.DIM_WITH_LABEL,
     lightDarkList: ImmutableList<LightDark> = persistentListOf(),
+    itemSpacingDp: Int = 8,
+    showCarousel: Boolean = false,
     onWallpaperClick: (wallpaper: Wallpaper) -> Unit = {},
+    onWallpaperLongClick: ((wallpaper: Wallpaper) -> Unit)? = null,
     onWallpaperFavoriteClick: (wallpaper: Wallpaper) -> Unit = {},
 ) {
     val isRefreshing = wallpapers.loadState.refresh == LoadState.Loading
@@ -85,8 +99,8 @@ fun WallpaperStaggeredGrid(
             GridColType.ADAPTIVE -> StaggeredGridCells.Adaptive(minSize = adaptiveMinWidth)
             GridColType.FIXED -> StaggeredGridCells.Fixed(count = gridColCount)
         },
-        verticalItemSpacing = 8.dp,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalItemSpacing = itemSpacingDp.dp,
+        horizontalArrangement = Arrangement.spacedBy(itemSpacingDp.dp),
     ) {
         header?.invoke(this)
         if (wallpapers.itemCount == 0 && !isRefreshing) {
@@ -126,15 +140,44 @@ fun WallpaperStaggeredGrid(
                     lightDarkTypeFlags = lightDarkList.find { v ->
                         v.sourceId == it.id && v.source == it.source
                     }?.typeFlags ?: LightDarkType.UNSPECIFIED,
+                    isGalleryCover = showCarousel &&
+                        it is RedditWallpaper &&
+                        it.galleryPosition == 0,
                     onClick = { onWallpaperClick(it) },
+                    onLongClick = onWallpaperLongClick?.let { cb -> { cb(it) } },
                     onFavoriteClick = { onWallpaperFavoriteClick(it) },
                 )
             } ?: PlaceholderWallpaperCard()
+        }        // Append-loading spinner
+        if (wallpapers.loadState.append is LoadState.Loading) {
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ProgressIndicator(circular = true)
+                }
+            }
         }
-    }
+        // End-of-pagination footer
+        if (wallpapers.loadState.append.endOfPaginationReached && wallpapers.itemCount > 0) {
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Text(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 20.dp),
+                    text = stringResource(R.string.no_more_wallpapers),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }    }
 }
 
-private fun getAdaptiveMinWidth(
+internal fun getAdaptiveMinWidth(
     gridColType: GridColType,
     contentPadding: PaddingValues,
     layoutDirection: LayoutDirection,

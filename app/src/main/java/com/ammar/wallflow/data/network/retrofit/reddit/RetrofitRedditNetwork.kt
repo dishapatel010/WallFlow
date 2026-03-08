@@ -11,8 +11,8 @@ class RetrofitRedditNetwork(
         search: RedditSearch,
         after: String?,
     ) = with(search.filters) {
-        if (subreddits.isEmpty()) {
-            throw IllegalArgumentException("subreddits cannot be empty")
+        require(subreddits.isNotEmpty()) {
+            "At least one subreddit must be configured for Reddit search."
         }
         redditNetworkApi.search(
             query = "self:no ${search.query}".trimAll(),

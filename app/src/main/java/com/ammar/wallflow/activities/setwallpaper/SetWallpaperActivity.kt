@@ -143,7 +143,7 @@ class SetWallpaperActivity : ComponentActivity() {
             navigationBarVisible = systemState.navigationBarVisible,
             navigationBarColor = systemState.navigationBarColor,
         )
-        WallFlowTheme(darkTheme = darkTheme) {
+        WallFlowTheme(darkTheme = darkTheme, accentColor = uiState.accentColor) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = Color.Black,

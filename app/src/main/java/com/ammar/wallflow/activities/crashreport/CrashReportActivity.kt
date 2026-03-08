@@ -25,7 +25,9 @@ class CrashReportActivity : ComponentActivity() {
             helper = CrashReportHelper(this, intent)
             helper.reportData // try to read the report data to fail fast if report is corrupted
             setContent {
-                WallFlowTheme {
+                val viewModel = hiltViewModel<CrashReportViewModel>()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                WallFlowTheme(accentColor = uiState.accentColor) {
                     CrashReportContent()
                 }
             }

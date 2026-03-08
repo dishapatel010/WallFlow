@@ -28,7 +28,9 @@ import com.ammar.wallflow.R
 import com.ammar.wallflow.destinations.WallpaperScreenDestination
 import com.ammar.wallflow.extensions.search
 import com.ammar.wallflow.model.CollectionCategory
+import com.ammar.wallflow.model.Source
 import com.ammar.wallflow.model.Wallpaper
+import com.ammar.wallflow.ui.screens.collections.AppearanceFilter
 import com.ammar.wallflow.model.search.WallhavenTagSearchMeta
 import com.ammar.wallflow.model.search.WallhavenUploaderSearchMeta
 import com.ammar.wallflow.model.wallhaven.WallhavenTag
@@ -60,7 +62,7 @@ fun CollectionsScreen(
     val rootNavController = rootNavControllerWrapper.navController
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val viewerUiState by viewerViewModel.uiState.collectAsStateWithLifecycle()
-    val wallpapers = viewModel.wallpapers.collectAsLazyPagingItems()
+    val wallpapers = viewModel.feedItems.collectAsLazyPagingItems()
     val context = LocalContext.current
     val systemController = LocalSystemController.current
     val bottomBarController = LocalBottomBarController.current
@@ -151,7 +153,7 @@ fun CollectionsScreen(
                 top = 8.dp,
                 bottom = bottomPadding + 8.dp,
             ),
-            wallpapers = wallpapers,
+            feedItems = wallpapers,
             favorites = uiState.favorites,
             viewedList = uiState.viewedList,
             viewedWallpapersLook = uiState.viewedWallpapersLook,
@@ -161,27 +163,41 @@ fun CollectionsScreen(
             selectedWallpaper = uiState.selectedWallpaper,
             showSelection = systemState.isExpanded,
             layoutPreferences = uiState.layoutPreferences,
-            header = {
-                header(
-                    selectedCategory = uiState.selectedCategory,
-                    onCategoryClick = viewModel::changeCategory,
-                )
+            selectedCategory = uiState.selectedCategory,
+            selectedSourceFilter = uiState.selectedSourceFilter,
+            selectedPurityFilter = uiState.selectedPurityFilter,
+            selectedAppearanceFilter = uiState.selectedAppearanceFilter,
+            selectedDateFilter = uiState.selectedDateFilter,
+            showDateSeparators = uiState.showDateSeparators,
+            availableDates = uiState.availableDates,
+            onCategoryClick = viewModel::changeCategory,
+            onApplyFilters = { source, purity, appearance, date, showSep ->
+                viewModel.setSourceFilter(source)
+                viewModel.setPurityFilter(purity)
+                viewModel.setAppearanceFilter(appearance)
+                viewModel.setDateFilter(date)
+                viewModel.setShowDateSeparators(showSep)
             },
-            emptyContent = {
-                item(span = StaggeredGridItemSpan.FullLine) {
-                    Text(
-                        modifier = Modifier.padding(vertical = 100.dp),
-                        text = stringResource(
-                            when (uiState.selectedCategory) {
-                                CollectionCategory.FAVORITES -> R.string.no_favorites
-                                CollectionCategory.LIGHT_DARK -> R.string.no_light_dark
-                            },
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                        textAlign = TextAlign.Center,
-                    )
-                }
+            quickActionsWallpaper = uiState.quickActionsWallpaper,
+            onWallpaperLongClick = viewModel::setQuickActionsWallpaper,
+            onQuickActionsDismiss = { viewModel.setQuickActionsWallpaper(null) },
+            onQuickActionsFavoriteClick = viewModel::toggleFavorite,
+            onQuickActionsApplyWallpaperClick = { wallpaper ->
+                applyWallpaper(context, viewerViewModel, wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
+            onQuickActionsDownloadClick = { wallpaper ->
+                viewerViewModel.download(wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
+            onQuickActionsShareClick = { wallpaper ->
+                shareWallpaperUrl(context, wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
+            },
+            showTelegram = uiState.telegramIsConfigured,
+            onQuickActionsTelegramClick = { wallpaper ->
+                viewerViewModel.postToTelegram(wallpaper)
+                viewModel.setQuickActionsWallpaper(null)
             },
             fullWallpaper = viewerUiState.wallpaper,
             fullWallpaperActionsVisible = viewerUiState.actionsVisible,
@@ -204,7 +220,8 @@ fun CollectionsScreen(
                 shareWallpaper(context, viewerViewModel, wallpaper)
             },
             onFullWallpaperApplyWallpaperClick = {
-                val wallpaper = viewerUiState.wallpaper ?: return@CollectionsScreenContent
+                val wallpaper = viewerUiState.galleryWallpapers?.getOrNull(viewerViewModel.currentGalleryPage)
+                    ?: viewerUiState.wallpaper ?: return@CollectionsScreenContent
                 applyWallpaper(context, viewerViewModel, wallpaper)
             },
             onFullWallpaperFullScreenClick = {
@@ -221,7 +238,20 @@ fun CollectionsScreen(
             onFullWallpaperTagClick = onTagClick,
             onFullWallpaperUploaderClick = onUploaderClick,
             onFullWallpaperDownloadPermissionsGranted = viewerViewModel::download,
+            onFullWallpaperDownloadAllPermissionsGranted = viewerViewModel::downloadAll,
             onFullWallpaperLightDarkTypeFlagsChange = viewerViewModel::updateLightDarkTypeFlags,
+            fullWallpaperGalleryWallpapers = viewerUiState.galleryWallpapers,
+            fullWallpaperGalleryPageIndex = viewerUiState.galleryPageIndex,
+            onFullWallpaperGalleryPageChange = viewerViewModel::setGalleryPage,
+            fullWallpaperShowGalleryFavDialog = viewerUiState.showGalleryFavDialog,
+            onFullWallpaperGalleryFavScopeSelected = viewerViewModel::toggleFavoriteScope,
+            onFullWallpaperGalleryFavScopeDismiss = viewerViewModel::dismissGalleryFavDialog,
+            showFullWallpaperTelegramAction = viewerUiState.telegramEnabled && viewerUiState.telegramIsConfigured,
+            onFullWallpaperPostToTelegramClick = {
+                val wallpaper = viewerUiState.galleryWallpapers?.getOrNull(viewerViewModel.currentGalleryPage)
+                    ?: viewerUiState.wallpaper ?: return@CollectionsScreenContent
+                viewerViewModel.postToTelegram(wallpaper)
+            },
         )
     }
 }

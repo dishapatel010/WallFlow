@@ -40,11 +40,13 @@ class DownloadManager @Inject constructor(
         downloadLocation: DownloadLocation = DownloadLocation.DOWNLOADS,
         tags: List<String>? = null,
         tagsExifWriteType: ExifWriteType = ExifWriteType.APPEND,
+        postToTelegram: Boolean = false,
     ) = requestDownload(
         context = context,
         url = wallpaper.data,
         downloadLocation = downloadLocation,
         notificationType = notificationType,
+        postToTelegram = postToTelegram,
         extraWorkerData = arrayOf(
             DownloadWorker.INPUT_KEY_WALLPAPER_ID to wallpaper.id,
             DownloadWorker.INPUT_KEY_WALLPAPER_SOURCE to wallpaper.source.name,
@@ -60,6 +62,7 @@ class DownloadManager @Inject constructor(
         notificationType: NotificationType = NotificationType.VISIBLE_SUCCESS,
         notificationTitle: String? = null,
         fileName: String? = null,
+        postToTelegram: Boolean = false,
         extraWorkerData: Array<out Pair<String, Any?>> = emptyArray(),
     ): String {
         val fName = when {
@@ -86,6 +89,7 @@ class DownloadManager @Inject constructor(
                     DownloadWorker.INPUT_KEY_NOTIFICATION_TYPE to notificationType.type,
                     DownloadWorker.INPUT_KEY_NOTIFICATION_TITLE to notificationTitle,
                     DownloadWorker.INPUT_KEY_SCAN_FILE to scanFile,
+                    DownloadWorker.INPUT_KEY_POST_TO_TELEGRAM to postToTelegram,
                     *extraWorkerData,
                 ),
             )

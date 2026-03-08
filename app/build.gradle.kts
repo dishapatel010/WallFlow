@@ -17,6 +17,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.hilt.gradle)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlinx.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
@@ -32,12 +33,12 @@ fun getAbi() = if (hasProperty("abi")) {
 
 android {
     namespace = "com.ammar.wallflow"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.ammar.wallflow"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 22
         versionName = "2.6.0-alpha01"
 
@@ -109,12 +110,11 @@ android {
         // Configures multiple APKs based on ABI.
         abi {
             // Enables building multiple APKs per ABI.
+            // gradle.startParameter is not configuration-cache compatible; use a project
+            // property instead. CI passes -Pgithub so splits are produced there automatically.
             isEnable = !hasProperty("fdroid")
                 && !hasProperty("noSplits")
-                && gradle.startParameter.taskNames.isNotEmpty()
-                && gradle.startParameter.taskNames.any {
-                it.contains("Release") || it.contains("Alpha")
-            }
+                && hasProperty("github")
 
             // Resets the list of ABIs that Gradle should create APKs for to none.
             reset()
@@ -151,20 +151,12 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         aidl = false
         buildConfig = true
         renderScript = false
         shaders = false
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.androidxComposeCompiler.get()
     }
 
     packaging {
@@ -192,7 +184,11 @@ android {
     }
 
     lint {
+        checkReleaseBuilds = false
         warning += "AutoboxingStateCreation"
+        // Disable crashing lifecycle lint check when using Kotlin 2.x
+        // https://issuetracker.google.com/issues/372893057
+        disable += "NullSafeMutableLiveData"
     }
 
     sourceSets {
@@ -201,6 +197,15 @@ android {
 
     androidResources {
         generateLocaleConfig = true
+    }
+}
+
+composeCompiler {
+    if (project.findProperty("composeCompilerReports") == "true") {
+        reportsDestination = layout.buildDirectory.dir("compose_compiler")
+    }
+    if (project.findProperty("composeCompilerMetrics") == "true") {
+        metricsDestination = layout.buildDirectory.dir("compose_compiler")
     }
 }
 
@@ -250,8 +255,10 @@ dependencies {
     implementation(libs.androidx.compose.adaptive.layout)
     implementation(libs.androidx.compose.adaptive.navigation)
     implementation(libs.androidx.compose.animation)
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.window.size.cls)
+    implementation(libs.material.kolor)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.ui.util)
@@ -274,6 +281,7 @@ dependencies {
     // Retrofit
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.kotlinx.serialization)

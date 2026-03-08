@@ -1,11 +1,14 @@
 package com.ammar.wallflow.ui.common
 
+import android.os.Build
 import android.util.Log
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +59,7 @@ import com.ammar.wallflow.extensions.aspectRatio
 import com.ammar.wallflow.model.LightDarkType
 import com.ammar.wallflow.model.Wallpaper
 import com.ammar.wallflow.model.isUnspecified
+import com.ammar.wallflow.model.reddit.RedditWallpaper
 import com.ammar.wallflow.model.wallhaven.WallhavenWallpaper
 import com.ammar.wallflow.model.wallhaven.wallhavenWallpaper1
 import com.ammar.wallflow.ui.theme.WallFlowTheme
@@ -66,6 +70,7 @@ import kotlin.math.roundToInt
 
 private val cardHeight = 300.dp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WallpaperCard(
     modifier: Modifier = Modifier,
@@ -78,13 +83,20 @@ fun WallpaperCard(
     isViewed: Boolean = false,
     viewedWallpapersLook: ViewedWallpapersLook = ViewedWallpapersLook.DIM_WITH_LABEL,
     lightDarkTypeFlags: Int = LightDarkType.UNSPECIFIED,
+    isGalleryCover: Boolean = false,
     onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null,
     onFavoriteClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    // On API 31+ Modifier.blur() uses GPU RenderEffect; on older devices we apply the blur
+    // as a Coil bitmap transformation backed by RenderScriptToolkit (works from API 21).
+    val useModifierBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val request = remember(
         context,
         wallpaper,
+        blur,
+        useModifierBlur,
     ) {
         ImageRequest.Builder(context).apply {
             data(wallpaper.thumbData ?: wallpaper.data)
@@ -94,6 +106,9 @@ fun WallpaperCard(
                     set("fallback_url", wallpaper.data)
                 }.build(),
             )
+            if (blur && !useModifierBlur) {
+                transformations(BlurTransformation(radius = 20, sampling = 2))
+            }
         }.build()
     }
     val transition = updateTransition(isSelected, label = "selection state")
@@ -130,12 +145,12 @@ fun WallpaperCard(
                 }
             }
             .clip(if (roundedCorners) CardDefaults.shape else RectangleShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .testTag("wallpaper"),
     ) {
         AsyncImage(
             modifier = Modifier
-                .blur(if (blur) 16.dp else 0.dp)
+                .blur(if (blur && useModifierBlur) 16.dp else 0.dp)
                 .clip(RectangleShape)
                 .fillMaxHeight()
                 .drawWithContent {
@@ -235,6 +250,9 @@ fun WallpaperCard(
                 CardLightDarkIcon(
                     typeFlags = lightDarkTypeFlags,
                 )
+            }
+            if (isGalleryCover) {
+                CardGalleryIcon()
             }
         }
         CardFavoriteButton(

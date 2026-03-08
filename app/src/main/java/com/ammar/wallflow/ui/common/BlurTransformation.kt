@@ -54,7 +54,8 @@ class BlurTransformation constructor(
                 drawBitmap(input, 0f, 0f, paint)
             }.run {
                 RenderScriptToolkit.blur(this, radius)
-            } ?: throw RuntimeException("Bitmap null")
+                    ?: throw RuntimeException("Bitmap null")
+            }
     }
 
     private companion object {

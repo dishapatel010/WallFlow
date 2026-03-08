@@ -18,8 +18,8 @@ import com.ammar.wallflow.model.Purity
 import com.ammar.wallflow.model.search.RedditFilters
 import com.ammar.wallflow.model.search.RedditSearch
 import com.ammar.wallflow.model.search.RedditSort
+import com.ammar.wallflow.model.search.RedditSubredditFilter
 import com.ammar.wallflow.model.search.RedditTimeRange
-import com.ammar.wallflow.ui.common.SubredditsInputField
 import com.ammar.wallflow.ui.theme.WallFlowTheme
 
 @Composable
@@ -34,7 +34,9 @@ internal fun EditRedditSearchContent(
         ),
     ),
     showQueryField: Boolean = true,
+    redditSubredditFilter: RedditSubredditFilter = RedditSubredditFilter(),
     onChange: (RedditSearch) -> Unit = {},
+    onFilterChange: (RedditSubredditFilter) -> Unit = {},
     onErrorStateChange: (Boolean) -> Unit = {},
 ) {
     Column(
@@ -49,19 +51,6 @@ internal fun EditRedditSearchContent(
                 onValueChange = { onChange(search.copy(query = it)) },
             )
         }
-        SubredditsInputField(
-            subreddits = search.filters.subreddits,
-            onChange = { subreddits, hasError ->
-                onChange(
-                    search.copy(
-                        filters = search.filters.copy(
-                            subreddits = subreddits,
-                        ),
-                    ),
-                )
-                onErrorStateChange(hasError || subreddits.isEmpty())
-            },
-        )
         PurityFilter(
             purities = if (search.filters.includeNsfw) {
                 setOf(Purity.SFW, Purity.NSFW)
@@ -105,6 +94,13 @@ internal fun EditRedditSearchContent(
                 )
             },
         )
+        if (search.filters.subreddits.isNotEmpty()) {
+            ExcludedSubredditsFilter(
+                allSubreddits = search.filters.subreddits,
+                subreddits = redditSubredditFilter.excludedSubreddits,
+                onChange = { onFilterChange(redditSubredditFilter.copy(excludedSubreddits = it)) },
+            )
+        }
     }
 }
 

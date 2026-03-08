@@ -21,6 +21,7 @@ import com.ammar.wallflow.data.preferences.ObjectDetectionPreferences
 import com.ammar.wallflow.data.preferences.PreferencesKeys
 import com.ammar.wallflow.data.preferences.Theme
 import com.ammar.wallflow.data.preferences.ViewedWallpapersLook
+import com.ammar.wallflow.data.preferences.TelegramPreferences
 import com.ammar.wallflow.data.preferences.ViewedWallpapersPreferences
 import com.ammar.wallflow.data.preferences.defaultAutoWallpaperConstraints
 import com.ammar.wallflow.data.preferences.defaultAutoWallpaperFreq
@@ -33,6 +34,7 @@ import com.ammar.wallflow.json
 import com.ammar.wallflow.model.OnlineSource
 import com.ammar.wallflow.model.WallpaperTarget
 import com.ammar.wallflow.model.search.RedditSearch
+import com.ammar.wallflow.model.search.RedditSubredditFilter
 import com.ammar.wallflow.model.search.Search
 import com.ammar.wallflow.model.search.WallhavenFilters
 import com.ammar.wallflow.model.search.WallhavenSearch
@@ -128,6 +130,22 @@ class AppPreferencesRepository @Inject constructor(
         dataStore.edit {
             it.updateLookAndFeelPreferences(lookAndFeelPreferences)
         }
+    }
+
+    suspend fun updateTelegramPreferences(
+        telegramPreferences: TelegramPreferences,
+    ) = withContext(ioDispatcher) {
+        dataStore.edit { it.updateTelegramPreferences(telegramPreferences) }
+    }
+
+    suspend fun updateRedditSubredditFilter(
+        filter: RedditSubredditFilter,
+    ) = withContext(ioDispatcher) {
+        dataStore.edit { it.updateRedditSubredditFilter(filter) }
+    }
+
+    suspend fun updateCollectionsShowDateSeparators(show: Boolean) = withContext(ioDispatcher) {
+        dataStore.edit { it.set(PreferencesKeys.COLLECTIONS_SHOW_DATE_SEPARATORS, show) }
     }
 
     private fun MutablePreferences.updateWallhavenApikey(wallhavenApiKey: String) {
@@ -242,7 +260,38 @@ class AppPreferencesRepository @Inject constructor(
             layoutPreferences.gridColMinWidthPct,
         )
         set(PreferencesKeys.LAYOUT_ROUNDED_CORNERS, layoutPreferences.roundedCorners)
+        set(PreferencesKeys.LAYOUT_GRID_ITEM_SPACING_DP, layoutPreferences.gridItemSpacingDp)
+        set(PreferencesKeys.LAYOUT_SHOW_CAROUSEL, layoutPreferences.showCarousel)
+        set(
+            PreferencesKeys.COLLECTIONS_SHOW_DATE_SEPARATORS,
+            layoutPreferences.showCollectionsDateSeparators,
+        )
         set(PreferencesKeys.SHOW_LOCAL_TAB, showLocalTab)
+        if (accentColor != null) {
+            set(PreferencesKeys.ACCENT_COLOR, accentColor.toString())
+        } else {
+            remove(PreferencesKeys.ACCENT_COLOR)
+        }
+    }
+
+    private fun MutablePreferences.updateTelegramPreferences(
+        telegramPreferences: TelegramPreferences,
+    ) = with(telegramPreferences) {
+        set(PreferencesKeys.TELEGRAM_ENABLED, enabled)
+        set(PreferencesKeys.TELEGRAM_BOT_TOKEN, botToken)
+        set(PreferencesKeys.TELEGRAM_CHAT_ID, chatId)
+        set(PreferencesKeys.TELEGRAM_MESSAGE_THREAD_ID, messageThreadId)
+        set(PreferencesKeys.TELEGRAM_POST_AFTER_DOWNLOAD, postAfterDownload)
+        set(PreferencesKeys.TELEGRAM_INCLUDE_FILE_NAME, includeFileName)
+        set(PreferencesKeys.TELEGRAM_INCLUDE_DATE, includeDate)
+        set(PreferencesKeys.TELEGRAM_INCLUDE_TAGS, includeTags)
+        set(PreferencesKeys.TELEGRAM_INCLUDE_SOURCE_URL, includeSourceUrl)
+        set(PreferencesKeys.TELEGRAM_SILENT_NOTIFICATION, silentNotification)
+        set(PreferencesKeys.TELEGRAM_DISABLE_WEB_PAGE_PREVIEW, disableWebPagePreview)
+    }
+
+    private fun MutablePreferences.updateRedditSubredditFilter(filter: RedditSubredditFilter) {
+        set(PreferencesKeys.REDDIT_SUBREDDIT_FILTER, json.encodeToString(filter))
     }
 
     suspend fun updateAutoWallpaperWorkRequestId(id: UUID?) = withContext(ioDispatcher) {
@@ -367,7 +416,32 @@ class AppPreferencesRepository @Inject constructor(
             mainRedditSearch = getMainRedditSearch(preferences),
             viewedWallpapersPreferences = getViewedWallpapersPreferences(preferences),
             acraEnabled = preferences[PreferencesKeys.ENABLE_ACRA] ?: true,
+            telegramPreferences = getTelegramPreferences(preferences),
+            redditSubredditFilter = getRedditSubredditFilter(preferences),
         )
+    }
+
+    private fun getTelegramPreferences(preferences: Preferences) = TelegramPreferences(
+        enabled = preferences[PreferencesKeys.TELEGRAM_ENABLED] ?: false,
+        botToken = preferences[PreferencesKeys.TELEGRAM_BOT_TOKEN] ?: "",
+        chatId = preferences[PreferencesKeys.TELEGRAM_CHAT_ID] ?: "",
+        messageThreadId = preferences[PreferencesKeys.TELEGRAM_MESSAGE_THREAD_ID] ?: "",
+        postAfterDownload = preferences[PreferencesKeys.TELEGRAM_POST_AFTER_DOWNLOAD] ?: false,
+        includeFileName = preferences[PreferencesKeys.TELEGRAM_INCLUDE_FILE_NAME] ?: true,
+        includeDate = preferences[PreferencesKeys.TELEGRAM_INCLUDE_DATE] ?: true,
+        includeTags = preferences[PreferencesKeys.TELEGRAM_INCLUDE_TAGS] ?: true,
+        includeSourceUrl = preferences[PreferencesKeys.TELEGRAM_INCLUDE_SOURCE_URL] ?: true,
+        silentNotification = preferences[PreferencesKeys.TELEGRAM_SILENT_NOTIFICATION] ?: false,
+        disableWebPagePreview = preferences[PreferencesKeys.TELEGRAM_DISABLE_WEB_PAGE_PREVIEW] ?: false,
+    )
+
+    private fun getRedditSubredditFilter(preferences: Preferences): RedditSubredditFilter {
+        val str = preferences[PreferencesKeys.REDDIT_SUBREDDIT_FILTER] ?: return RedditSubredditFilter()
+        return try {
+            json.decodeFromString(str)
+        } catch (e: Exception) {
+            RedditSubredditFilter()
+        }
     }
 
     private fun getViewedWallpapersPreferences(preferences: Preferences) =
@@ -444,6 +518,7 @@ class AppPreferencesRepository @Inject constructor(
         },
         layoutPreferences = getLayoutPreferences(preferences),
         showLocalTab = preferences[PreferencesKeys.SHOW_LOCAL_TAB] ?: true,
+        accentColor = preferences[PreferencesKeys.ACCENT_COLOR]?.toIntOrNull(),
     )
 
     private fun getLayoutPreferences(preferences: Preferences) = LayoutPreferences(
@@ -463,6 +538,10 @@ class AppPreferencesRepository @Inject constructor(
         gridColMinWidthPct = preferences[PreferencesKeys.LAYOUT_GRID_COL_MIN_WIDTH_PCT]
             ?: 40,
         roundedCorners = preferences[PreferencesKeys.LAYOUT_ROUNDED_CORNERS] ?: true,
+        gridItemSpacingDp = preferences[PreferencesKeys.LAYOUT_GRID_ITEM_SPACING_DP] ?: 8,
+        showCarousel = preferences[PreferencesKeys.LAYOUT_SHOW_CAROUSEL] ?: true,
+        showCollectionsDateSeparators =
+            preferences[PreferencesKeys.COLLECTIONS_SHOW_DATE_SEPARATORS] ?: false,
     )
 
     private suspend fun getAutoWallpaperPreferences(
@@ -732,6 +811,10 @@ class AppPreferencesRepository @Inject constructor(
                 }
                 updateViewedWallpapersPreferences(appPreferences.viewedWallpapersPreferences)
                 updateAcraEnabled(appPreferences.acraEnabled)
+                updateTelegramPreferences(appPreferences.telegramPreferences)
+                if (appPreferences.downloadLocation != null) {
+                    set(PreferencesKeys.DOWNLOAD_LOCATION, appPreferences.downloadLocation.toString())
+                }
             }
         }
     }

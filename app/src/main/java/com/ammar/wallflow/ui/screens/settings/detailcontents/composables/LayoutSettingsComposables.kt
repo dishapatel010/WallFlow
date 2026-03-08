@@ -70,8 +70,10 @@ import com.ammar.wallflow.data.preferences.GridType
 import com.ammar.wallflow.data.preferences.LayoutPreferences
 import com.ammar.wallflow.data.preferences.MAX_GRID_COLS
 import com.ammar.wallflow.data.preferences.MAX_GRID_COL_WIDTH_PCT
+import com.ammar.wallflow.data.preferences.MAX_GRID_ITEM_SPACING_DP
 import com.ammar.wallflow.data.preferences.MIN_GRID_COLS
 import com.ammar.wallflow.data.preferences.MIN_GRID_COL_WIDTH_PCT
+import com.ammar.wallflow.data.preferences.MIN_GRID_ITEM_SPACING_DP
 import com.ammar.wallflow.extensions.aspectRatio
 import com.ammar.wallflow.extensions.getScreenResolution
 import com.ammar.wallflow.extensions.toDp
@@ -555,6 +557,55 @@ internal fun LazyListScope.roundedCornersSection(
                     checked = roundedCorners,
                     onCheckedChange = { onRoundedCornersChange(it) },
                 )
+            },
+        )
+    }
+}
+
+internal fun LazyListScope.itemSpacingSection(
+    itemSpacingDp: Int = 8,
+    sliderPadding: Dp = 0.dp,
+    isExpanded: Boolean = false,
+    onItemSpacingDpChange: (Int) -> Unit = {},
+) {
+    item {
+        val context = LocalContext.current
+        var tempSpacing by remember(itemSpacingDp) { mutableIntStateOf(itemSpacingDp) }
+        SettingsExtraListItem(
+            isExpanded = isExpanded,
+            headlineContent = {
+                Text(text = "${stringResource(R.string.item_spacing)}: ${tempSpacing}dp")
+            },
+            supportingContent = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        modifier = Modifier.widthIn(min = sliderPadding),
+                        text = "${MIN_GRID_ITEM_SPACING_DP}dp",
+                        textAlign = TextAlign.Center,
+                    )
+                    Slider(
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics {
+                                contentDescription = context.getString(
+                                    R.string.item_spacing,
+                                )
+                            },
+                        value = tempSpacing.toFloat(),
+                        onValueChange = { tempSpacing = it.toInt() },
+                        valueRange = MIN_GRID_ITEM_SPACING_DP.toFloat()..MAX_GRID_ITEM_SPACING_DP.toFloat(),
+                        onValueChangeFinished = { onItemSpacingDpChange(tempSpacing) },
+                        steps = (MAX_GRID_ITEM_SPACING_DP - MIN_GRID_ITEM_SPACING_DP - 1).toInt(),
+                    )
+                    Text(
+                        modifier = Modifier.widthIn(min = sliderPadding),
+                        text = "${MAX_GRID_ITEM_SPACING_DP}dp",
+                        textAlign = TextAlign.Center,
+                    )
+                }
             },
         )
     }
